@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "ssl": {
+    "enabled": true,
+    "version": "2.0",
+    "setupDate": "2024-01-01T00:00:00.000Z",
+    "certificatePath": "/etc/letsencrypt/live/test1.example.com/fullchain.pem",
+    "privateKeyPath": "/etc/letsencrypt/live/test1.example.com/privkey.pem",
+    "domains": [
+      "test1.example.com",
+      "test2.example.com"
+    ],
+    "domainConfigs": [
+      {
+        "domain": "test1.example.com",
+        "challengeMethod": "http-01"
+      },
+      {
+        "domain": "test2.example.com",
+        "challengeMethod": "http-01"
+      }
+    ],
+    "challengeMethods": {
+      "test1.example.com": "http-01",
+      "test2.example.com": "http-01"
+    },
+    "lastUpdated": "2025-10-15T18:45:52.341Z"
+  },
+  "lastUpdated": "2025-10-15T18:45:52.342Z",
+  "domains": {
+    "test3.example.com": {
+      "challengeMethod": "dns-01",
+      "isWildcard": false,
+      "certificateType": "individual",
+      "addedDate": "2025-10-15T18:45:52.342Z"
+    }
+  },
+  "deployments": [
+    {
+      "id": "deploy-1760553952343",
+      "timestamp": "2025-10-15T18:45:52.343Z",
+      "type": "ssl-setup",
+      "domains": [
+        "test1.example.com",
+        "test2.example.com"
+      ],
+      "challengeMethods": {
+        "test1.example.com": "http-01",
+        "test2.example.com": "http-01"
+      },
+      "success": true
+    }
+  ]
+}

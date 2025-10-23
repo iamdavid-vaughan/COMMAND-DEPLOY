@@ -1,0 +1,37 @@
+{
+  "projectName": "focal-deploy-project",
+  "region": "us-east-1",
+  "startedAt": "2025-10-22T17:17:45.628Z",
+  "status": "completed",
+  "resources": {
+    "sshKey": {
+      "keyPairName": "focal-deploy-keypair-1761153230052",
+      "privateKeyPath": "/Users/davidvaughan/.ssh/focal-deploy-keypair-1761153230052",
+      "existed": false
+    },
+    "securityGroup": {
+      "securityGroupId": "sg-05b842836759a6f1d",
+      "existed": false
+    },
+    "s3Bucket": {
+      "bucketName": "focal-deploy-focal-deploy-project-useast1-53235626",
+      "existed": false
+    },
+    "ec2Instance": {
+      "instanceId": "i-012e16fcfc822a87d",
+      "privateIpAddress": "172.31.19.147",
+      "publicIpAddress": "35.175.185.198",
+      "allocationId": null,
+      "state": "running",
+      "instanceType": "t3.micro",
+      "launchedAt": "2025-10-22T17:13:58.000Z",
+      "ssmEnabled": true,
+      "emergencyAccess": {
+        "ssmSessionManager": true,
+        "roleName": "focal-deploy-project-ssm-role",
+        "instanceProfileName": "focal-deploy-project-ssm-instance-profile"
+      }
+    }
+  },
+  "completedAt": "2025-10-22T17:17:46.082Z"
+}
