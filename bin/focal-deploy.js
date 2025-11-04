@@ -15,6 +15,7 @@ const { ValidateCommand } = require('../lib/commands/validate');
 const { DownCommand } = require('../lib/commands/down');
 const { deployCommand } = require('../lib/commands/deploy');
 const { sslCommand, sslStatusCommand } = require('../lib/commands/ssl');
+const wizardSSLCommand = require('../lib/commands/wizard-ssl');
 const { appDeployCommand, appStatusCommand, appRestartCommand, appStopCommand } = require('../lib/commands/app');
 const { EnhancedStatusCommand } = require('../lib/commands/enhanced-status');
 const { monitorSetupCommand, monitorStatusCommand, monitorLogsCommand } = require('../lib/commands/monitor');
@@ -235,6 +236,18 @@ program
   .action(async (options) => {
     try {
       await sslStatusCommand(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('wizard:ssl')
+  .description('Regenerate SSL certificates for all domains from wizard configuration')
+  .action(async (options) => {
+    try {
+      await wizardSSLCommand(options);
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
