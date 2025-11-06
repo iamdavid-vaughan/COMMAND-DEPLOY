@@ -14,8 +14,7 @@
     "assets": [
       "templates/**/*",
       "config/**/*",
-      "docs/**/*",
-      "node_modules/axios/**/*"
+      "docs/**/*"
     ],
     "targets": [
       "node18-macos-x64",
