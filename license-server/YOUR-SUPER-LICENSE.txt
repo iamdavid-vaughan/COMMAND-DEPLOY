@@ -1,0 +1,95 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+           FOCAL DEPLOY - DEVELOPER SUPER LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+License Key:    FCLDPLY-SUPER-LIFETIME-D3V3L0P3R
+
+Type:           SUPER (Unlimited Developer License)
+Email:          ANY (Works with any email address)
+Version Limit:  LIFETIME (All versions forever)
+Max Machines:   UNLIMITED (Install anywhere)
+Expires:        NEVER
+Created:        2024-11-06
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔐 KEEP THIS SECRET - DO NOT SHARE
+
+This is your personal developer license. Features:
+✅ Works with ANY email address (no binding)
+✅ All versions (past, present, future)
+✅ Install on unlimited machines
+✅ Never expires
+✅ No validation required
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACTIVATION INSTRUCTIONS:
+
+1. Start license server:
+   cd license-server
+   npm install
+   npm run generate-key
+   (Select option 1 for SUPER)
+
+2. Activate on any machine:
+   focal-deploy activate
+
+3. Enter license key:
+   FCLDPLY-SUPER-LIFETIME-D3V3L0P3R
+
+4. Enter any email:
+   (Can be anything, doesn't matter)
+
+5. Done! License active forever on that machine.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NOTES:
+
+- This license bypasses ALL checks
+- No email validation
+- No version checking
+- No machine limits
+- No expiration
+- Works offline forever (no server required after activation)
+
+Use for:
+- Your development machines
+- Testing
+- Demos
+- Internal company use
+
+DO NOT:
+- Share publicly
+- Include in repositories
+- Give to customers
+- Post online
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To add this license to the database manually:
+
+sqlite3 license-server/licenses.db << 'SQL'
+INSERT INTO licenses (
+  license_key,
+  email,
+  license_type,
+  version_limit,
+  max_activations,
+  current_activations,
+  expires_at,
+  is_active
+) VALUES (
+  'FCLDPLY-SUPER-LIFETIME-D3V3L0P3R',
+  NULL,
+  'SUPER',
+  'LIFETIME',
+  999,
+  0,
+  NULL,
+  1
+);
+SQL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
