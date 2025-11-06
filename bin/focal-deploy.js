@@ -23,7 +23,10 @@ const { dnsUpdate, dnsStatus, dnsSync, dnsVerify } = require('../lib/commands/dn
 const { securitySetup, securityStatus, securityAudit, sshKeySetup, securityReset } = require('../lib/commands/security');
 const { firewallStatus, fail2banStatus } = require('../lib/commands/firewall');
 const { EmergencyRecoveryCommand } = require('../lib/commands/emergency-recovery');
+const { ClosePort22Command } = require('../lib/commands/close-port-22');
 const { ResumeCommand } = require('../lib/commands/resume');
+const { activateLicense, deactivateLicense, licenseInfo } = require('../lib/commands/license');
+const { LicenseManager } = require('../lib/utils/license-manager');
 
 const program = new Command();
 
@@ -65,6 +68,10 @@ program
   .option('--git-email <email>', 'Git user email for commits')
   .action(async (projectName, options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const newCommand = new NewCommand();
       await newCommand.execute(projectName, options);
     } catch (error) {
@@ -99,6 +106,10 @@ program
   .option('--dry-run', 'Simulate push and deployment without making changes')
   .action(async (options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const pushDeployCommand = new PushDeployCommand();
       await pushDeployCommand.execute(options);
     } catch (error) {
@@ -114,6 +125,10 @@ program
   .option('--dry-run', 'Simulate deployment without creating AWS resources')
   .action(async (options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const upCommand = new UpCommand();
       await upCommand.execute(options);
     } catch (error) {
@@ -568,6 +583,20 @@ program
     }
   });
 
+// Close port 22 command
+program
+  .command('close-port-22')
+  .description('🔒 Remove port 22 from security group after SSH hardening (security fix)')
+  .action(async () => {
+    try {
+      const closePort22Command = new ClosePort22Command();
+      await closePort22Command.execute();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
 // Resume command
 program
   .command('resume')
@@ -576,6 +605,43 @@ program
     try {
       const resumeCommand = new ResumeCommand();
       await resumeCommand.execute(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// License commands
+program
+  .command('activate')
+  .description('🔐 Activate your Focal Deploy license')
+  .action(async () => {
+    try {
+      await activateLicense();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('deactivate')
+  .description('🔓 Deactivate license on this machine')
+  .action(async () => {
+    try {
+      await deactivateLicense();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('license')
+  .description('📄 Show license information')
+  .action(async () => {
+    try {
+      await licenseInfo();
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
