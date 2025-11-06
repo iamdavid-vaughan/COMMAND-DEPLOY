@@ -23,6 +23,7 @@ const { dnsUpdate, dnsStatus, dnsSync, dnsVerify } = require('../lib/commands/dn
 const { securitySetup, securityStatus, securityAudit, sshKeySetup, securityReset } = require('../lib/commands/security');
 const { firewallStatus, fail2banStatus } = require('../lib/commands/firewall');
 const { EmergencyRecoveryCommand } = require('../lib/commands/emergency-recovery');
+const { ClosePort22Command } = require('../lib/commands/close-port-22');
 const { ResumeCommand } = require('../lib/commands/resume');
 
 const program = new Command();
@@ -562,6 +563,20 @@ program
   .action(async (options) => {
     try {
       await securityReset(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// Close port 22 command
+program
+  .command('close-port-22')
+  .description('🔒 Remove port 22 from security group after SSH hardening (security fix)')
+  .action(async () => {
+    try {
+      const closePort22Command = new ClosePort22Command();
+      await closePort22Command.execute();
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
