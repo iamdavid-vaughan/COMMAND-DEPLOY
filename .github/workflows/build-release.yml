@@ -41,7 +41,7 @@ jobs:
       - name: Build for macOS ${{ matrix.arch }}
         run: |
           echo "Building for macOS ${{ matrix.arch }} on $(uname -m)"
-          pkg . --targets node18-macos-${{ matrix.arch }} --out-path dist/macos
+          pkg . --targets node18-macos-${{ matrix.arch }} --out-path dist/macos --public-packages axios --compress GZip
 
       - name: Verify binary architecture
         run: |
@@ -102,7 +102,7 @@ jobs:
             # For ARM64, we need to rebuild native modules
             npm rebuild --arch=arm64
           fi
-          pkg . --targets node18-linux-${{ matrix.arch }} --out-path dist/linux
+          pkg . --targets node18-linux-${{ matrix.arch }} --out-path dist/linux --public-packages axios --compress GZip
 
       - name: Verify binary
         run: |
@@ -148,7 +148,7 @@ jobs:
       - name: Build for Windows x64
         run: |
           echo "Building for Windows x64"
-          pkg . --targets node18-win-x64 --out-path dist/windows
+          pkg . --targets node18-win-x64 --out-path dist/windows --public-packages axios --compress GZip
 
       - name: Verify binary
         run: |
