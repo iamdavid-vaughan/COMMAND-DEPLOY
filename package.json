@@ -17,7 +17,9 @@
     "package:linux": "pkg . --targets node18-linux-x64,node18-linux-arm64 --out-path dist/linux",
     "package:windows": "pkg . --targets node18-win-x64 --out-path dist/windows",
     "package:all": "npm run package:macos && npm run package:linux && npm run package:windows",
-    "prepare:release": "npm run test && npm run package:all"
+    "package:current": "node scripts/build-native.js && pkg . --targets node18-${npm_config_platform}-${npm_config_arch} --out-path dist/${npm_config_platform}",
+    "prepare:release": "npm run test && npm run package:all",
+    "postinstall": "npm rebuild keytar --update-binary || echo 'Warning: keytar native build failed, will use fallback storage'"
   },
   "keywords": [
     "aws",
