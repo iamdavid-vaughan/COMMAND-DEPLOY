@@ -154,4 +154,4 @@ logs
 
 # AWS credentials (should never be committed)
 aws-credentials.json
-credentials.json
+credentials.jsonfocal-test
