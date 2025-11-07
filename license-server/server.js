@@ -101,10 +101,17 @@ function generateValidationToken(licenseKey, email, machineId) {
     timestamp: Date.now()
   });
 
-  const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY);
+  // Use createCipheriv with IV (Node.js modern API)
+  const algorithm = 'aes-256-cbc';
+  const key = Buffer.from(ENCRYPTION_KEY.substring(0, 32)); // Ensure 32 bytes for aes-256
+  const iv = crypto.randomBytes(16);
+
+  const cipher = crypto.createCipheriv(algorithm, key, iv);
   let encrypted = cipher.update(data, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  return encrypted;
+
+  // Prepend IV to encrypted data (needed for decryption)
+  return iv.toString('hex') + ':' + encrypted;
 }
 
 // POST /api/v1/validate
