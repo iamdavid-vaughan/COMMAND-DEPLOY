@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const crypto = require('crypto');
+const path = require('path');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const Database = require('better-sqlite3');
 require('dotenv').config();
@@ -10,8 +11,10 @@ const app = express();
 const PORT = process.env.PORT || 3100;
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 
-// Initialize SQLite database
-const db = new Database('licenses.db');
+// Initialize SQLite database with absolute path
+const dbPath = path.join(__dirname, 'licenses.db');
+console.log('Database path:', dbPath);
+const db = new Database(dbPath);
 
 // Create tables
 db.exec(`
@@ -67,6 +70,15 @@ app.use(async (req, res, next) => {
   } catch {
     res.status(429).json({ error: 'Too many requests' });
   }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    database: 'connected'
+  });
 });
 
 // Utility: Check version compatibility
