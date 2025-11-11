@@ -35,7 +35,8 @@
     "emergency-access"
   ],
   "author": "Focal Deploy Team",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.0.0",
     "@aws-sdk/client-ec2-instance-connect": "^3.911.0",
