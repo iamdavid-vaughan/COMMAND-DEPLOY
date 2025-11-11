@@ -5,7 +5,7 @@
 
 ## PLEASE READ CAREFULLY
 
-This End User License Agreement ("Agreement") is a legal agreement between you (either an individual or a single entity, "You" or "User") and Focal Deploy ("Company", "We", "Us") for the use of Focal Deploy software, services, and related materials (collectively, the "Service").
+This End User License Agreement ("Agreement") is a legal agreement between you (either an individual or a single entity, "You" or "User") and DNS Publishing, LLC ("Company", "We", "Us", "Focal Deploy") for the use of Focal Deploy software, services, and related materials (collectively, the "Service").
 
 **BY CLICKING "I ACCEPT", INSTALLING, OR USING THE SERVICE, YOU AGREE TO BE BOUND BY THE TERMS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT USE THE SERVICE.**
 
@@ -159,7 +159,7 @@ Basic and Professional tiers do not include uptime SLAs. Enterprise customers re
 
 ### 7.1 Support Channels
 - **Basic**: Community Discord, documentation
-- **Professional**: Email support (support@focal-deploy.com), 48-hour response
+- **Professional**: Email support (support@focuswithfocal.com), 48-hour response
 - **Enterprise**: Priority email + phone, 4-hour response, dedicated Slack channel
 
 ### 7.2 Support Scope
@@ -271,7 +271,7 @@ You agree to indemnify and hold Focal Deploy harmless from any claims, damages, 
 ## 13. PRIVACY AND DATA PROTECTION
 
 ### 13.1 Privacy Policy
-Our Privacy Policy (https://focal-deploy.com/privacy) explains how we collect, use, and protect your data.
+Our Privacy Policy (https://focuswithfocal.com/privacy) explains how we collect, use, and protect your data.
 
 ### 13.2 Data Processing
 For EU users, we comply with GDPR:
@@ -330,13 +330,13 @@ We are not liable for delays or failures due to circumstances beyond our reasona
 
 ## 17. CONTACT INFORMATION
 
-**Focal Deploy**
-Email: legal@focal-deploy.com
-Support: support@focal-deploy.com
-Website: https://focal-deploy.com
+**DNS Publishing, LLC (Focal Deploy)**
+Email: legal@focuswithfocal.com
+Support: support@focuswithfocal.com
+Website: https://focuswithfocal.com
 
-For Enterprise licensing: enterprise@focal-deploy.com
-For billing questions: billing@focal-deploy.com
+For Enterprise licensing: enterprise@focuswithfocal.com
+For billing questions: billing@focuswithfocal.com
 
 ---
 
@@ -349,4 +349,4 @@ By clicking "I Accept", creating an account, or using the Service, you acknowled
 
 ---
 
-© 2025 Focal Deploy. All Rights Reserved.
+© 2025 DNS Publishing, LLC. All Rights Reserved.

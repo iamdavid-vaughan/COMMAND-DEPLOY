@@ -8,11 +8,11 @@
  * Licensed under the Focal Deploy Proprietary License.
  * See LICENSE file in the project root for license information.
  *
- * For licensing inquiries: licensing@focal-deploy.com
- * For support: support@focal-deploy.com
+ * For licensing inquiries: licensing@focuswithfocal.com
+ * For support: support@focuswithfocal.com
  *
- * @author Focal Deploy Team
- * @copyright 2025 Focal Deploy
+ * @author DNS Publishing, LLC
+ * @copyright 2025 DNS Publishing, LLC
  * @license Proprietary
  */
 

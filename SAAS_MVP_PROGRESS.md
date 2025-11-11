@@ -1,6 +1,7 @@
 # Focal Deploy SaaS MVP - Implementation Progress
 
 **Date**: November 11, 2025
+**Entity**: DNS Publishing, LLC
 **Session**: Pick up from session_011CUpt8JSFt6qambRjtJ9Wc
 **Branch**: `claude/pick-up-wwh-011CV2bRf52QD5yHg6dse1Kz`
 **Status**: Phase 1 Core Infrastructure COMPLETE ✅
@@ -346,7 +347,7 @@ focal-deploy shell focal-saas-server
 # Start with PM2
 pm2 start server.js --name focal-saas
 ```
-**Cost**: ~$17-34/month (t3.small to t3.medium EC2)
+**Cost**: ~$34/month (t3.medium to t3.medium EC2)
 
 ---
 

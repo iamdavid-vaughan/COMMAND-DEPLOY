@@ -92,7 +92,7 @@ MASTER_ENCRYPTION_KEY=your-32-byte-hex-key
 # Optional
 PORT=3000
 NODE_ENV=production
-ALLOWED_ORIGINS=https://dashboard.focal-deploy.com
+ALLOWED_ORIGINS=https://dashboard.focuswithfocal.com
 ```
 
 ## API Endpoints
@@ -347,7 +347,7 @@ pm2 save
 
 ```bash
 # Basic health
-curl https://api.focal-deploy.com/api/health
+curl https://api.focuswithfocal.com/api/health
 
 # Response
 {
@@ -419,7 +419,7 @@ npm run dev
 const axios = require('axios');
 
 const client = axios.create({
-  baseURL: 'https://api.focal-deploy.com',
+  baseURL: 'https://api.focuswithfocal.com',
   headers: {
     'Authorization': `Bearer ${token}`
   }
@@ -440,12 +440,12 @@ const deployment = await client.post('/api/deployments', {
 
 ```bash
 # Login
-curl -X POST https://api.focal-deploy.com/api/auth/login \
+curl -X POST https://api.focuswithfocal.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password"}'
 
 # Get deployments
-curl https://api.focal-deploy.com/api/deployments \
+curl https://api.focuswithfocal.com/api/deployments \
   -H "Authorization: Bearer eyJhbGc..."
 ```
 
@@ -484,15 +484,15 @@ redis-cli ping
 
 ## Support
 
-- **Documentation**: https://docs.focal-deploy.com
+- **Documentation**: https://docs.focuswithfocal.com
 - **Issues**: https://github.com/focal-deploy/focal-deploy/issues
-- **Email**: support@focal-deploy.com
-- **Enterprise**: enterprise@focal-deploy.com
+- **Email**: support@focuswithfocal.com
+- **Enterprise**: enterprise@focuswithfocal.com
 
 ---
 
 ## License
 
-Copyright (c) 2025 Focal Deploy. All Rights Reserved.
+Copyright (c) 2025 DNS Publishing, LLC. All Rights Reserved.
 
 This software is proprietary and confidential. See LICENSE file for details.
