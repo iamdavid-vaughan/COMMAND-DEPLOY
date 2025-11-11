@@ -57,8 +57,8 @@ git push origin claude/pick-up-wwh-011CV2bRf52QD5yHg6dse1Kz
 SSH into server and clone:
 ```bash
 cd ~/app
-git clone https://github.com/iamdavid-vaughan/COMMAND-DEPLOY.git
-cd COMMAND-DEPLOY
+git clone https://github.com/iamdavid-vaughan/COMMAND-DEPLOY.git focal-deploy
+cd focal-deploy
 git checkout claude/pick-up-wwh-011CV2bRf52QD5yHg6dse1Kz
 cd saas-server
 ./scripts/deploy.sh
@@ -190,7 +190,7 @@ pm2 monit
 
 ### Update Application
 ```bash
-cd ~/app/saas-server
+cd ~/app/focal-deploy/saas-server
 git pull  # If using git deployment
 npm install
 pm2 restart focal-saas-api
