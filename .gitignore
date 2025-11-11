@@ -158,3 +158,4 @@ credentials.json
 
 # Test directory
 focal-test/
+saas-server-deploy.tar.gz
