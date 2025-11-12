@@ -20,6 +20,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const { generateToken, refreshToken } = require('../middleware/auth');
+const { getModels } = require('../models');
 
 const router = express.Router();
 
@@ -43,36 +44,50 @@ router.post('/register',
       }
 
       const { email, password, name, company } = req.body;
+      const { User } = getModels();
 
-      // TODO: Check if user already exists
-      // const existingUser = await db.getUserByEmail(email);
-      // if (existingUser) {
-      //   return res.status(409).json({ error: 'User already exists' });
-      // }
+      // Check if user already exists
+      const existingUser = await User.findOne({ where: { email } });
+      if (existingUser) {
+        return res.status(409).json({
+          error: 'User already exists',
+          message: 'An account with this email already exists'
+        });
+      }
 
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // TODO: Create user in database
-      const user = {
-        id: 'user-' + Date.now(), // Replace with actual DB insert
+      // Parse name into first_name and last_name
+      const nameParts = name ? name.trim().split(' ') : [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Create user in database
+      const user = await User.create({
         email,
-        name,
-        company,
-        licenseTier: 'basic', // Default to Basic tier
-        createdAt: new Date().toISOString()
-      };
+        password_hash: passwordHash,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: company || null,
+        license_tier: 'basic',
+        status: 'active'
+      });
 
       // Generate JWT token
-      const token = generateToken(user);
+      const token = generateToken({
+        id: user.id,
+        email: user.email,
+        licenseTier: user.license_tier
+      });
 
       res.status(201).json({
         message: 'User registered successfully',
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
-          licenseTier: user.licenseTier
+          name: `${user.first_name} ${user.last_name}`.trim(),
+          licenseTier: user.license_tier
         },
         token,
         expiresIn: '7d'
@@ -102,16 +117,10 @@ router.post('/login',
       }
 
       const { email, password } = req.body;
+      const { User } = getModels();
 
-      // TODO: Fetch user from database
-      // const user = await db.getUserByEmail(email);
-      const user = {
-        id: 'user-123',
-        email: 'test@example.com',
-        passwordHash: await bcrypt.hash('password123', 10),
-        name: 'Test User',
-        licenseTier: 'pro'
-      };
+      // Fetch user from database
+      const user = await User.findOne({ where: { email } });
 
       if (!user) {
         return res.status(401).json({
@@ -120,8 +129,16 @@ router.post('/login',
         });
       }
 
+      // Check if user is active
+      if (user.status !== 'active') {
+        return res.status(403).json({
+          error: 'Account disabled',
+          message: 'Your account has been disabled. Please contact support.'
+        });
+      }
+
       // Verify password
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
       if (!isValidPassword) {
         return res.status(401).json({
@@ -130,19 +147,23 @@ router.post('/login',
         });
       }
 
-      // Generate JWT token
-      const token = generateToken(user);
+      // Update last login time
+      await user.update({ last_login_at: new Date() });
 
-      // TODO: Log login event
-      // await db.logLoginEvent(user.id, req.ip);
+      // Generate JWT token
+      const token = generateToken({
+        id: user.id,
+        email: user.email,
+        licenseTier: user.license_tier
+      });
 
       res.json({
         message: 'Login successful',
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
-          licenseTier: user.licenseTier
+          name: `${user.first_name} ${user.last_name}`.trim(),
+          licenseTier: user.license_tier
         },
         token,
         expiresIn: '7d'

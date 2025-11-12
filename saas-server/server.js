@@ -42,6 +42,7 @@ const { authenticate } = require('./middleware/auth');
 // Import services
 const { initializeDatabase } = require('./services/database');
 const { initializeRedis } = require('./services/redis');
+const { initializeModels } = require('./models');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -170,7 +171,12 @@ async function startServer() {
     // Initialize Database
     console.log(chalk.gray('📦 Initializing database connection...'));
     await initializeDatabase();
-    console.log(chalk.green('✅ Database connected\n'));
+    console.log(chalk.green('✅ Database connected'));
+
+    // Initialize Models
+    console.log(chalk.gray('📦 Initializing database models...'));
+    initializeModels();
+    console.log(chalk.green('✅ Models initialized\n'));
 
     // Initialize Redis
     console.log(chalk.gray('📦 Initializing Redis connection...'));
