@@ -38,6 +38,7 @@ const { EnhancedStatusCommand } = require('../lib/commands/enhanced-status');
 const { monitorSetupCommand, monitorStatusCommand, monitorLogsCommand } = require('../lib/commands/monitor');
 const { domainConfigureCommand, domainVerifyCommand, domainStatusCommand, domainSubdomainCommand, domainWaitCommand } = require('../lib/commands/domain');
 const { dnsUpdate, dnsStatus, dnsSync, dnsVerify } = require('../lib/commands/dns');
+const { updateWizardDNS } = require('../lib/commands/dns-fix');
 const { securitySetup, securityStatus, securityAudit, sshKeySetup, securityReset } = require('../lib/commands/security');
 const { firewallStatus, fail2banStatus } = require('../lib/commands/firewall');
 const { EmergencyRecoveryCommand } = require('../lib/commands/emergency-recovery');
@@ -485,6 +486,20 @@ program
   .action(async (options) => {
     try {
       await dnsVerify(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('dns-fix')
+  .description('Update DNS records for wizard-based deployments (works with .focal-deploy/config.json)')
+  .option('--dry-run', 'Simulate DNS updates without making changes')
+  .option('--project-path <path>', 'Path to deployment directory (default: current directory)')
+  .action(async (options) => {
+    try {
+      await updateWizardDNS(options);
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
