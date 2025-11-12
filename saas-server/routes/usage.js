@@ -163,47 +163,111 @@ router.get('/limits', async (req, res, next) => {
 
     // Define tier limits
     const tierLimits = {
-      basic: {
+      starter: {
+        name: 'Starter',
+        price: {
+          monthly: 39,
+          annual: null // Monthly only
+        },
         deployments: {
           perMonth: 10,
-          concurrent: 2
+          concurrent: 1
         },
+        licenses: 1, // machines
         instances: {
-          max: 5
+          max: 3
         },
         storage: {
           maxGB: 10
         },
-        teamMembers: 1,
-        support: 'community'
+        apiAccess: false,
+        support: 'community',
+        dfy: false // No done-for-you
       },
       pro: {
+        name: 'Pro',
+        price: {
+          monthly: 99,
+          annual: 950 // ~20% discount
+        },
         deployments: {
           perMonth: 50,
-          concurrent: 10
+          concurrent: 5
         },
+        licenses: 2, // machines
         instances: {
-          max: 25
+          max: 15
         },
         storage: {
-          maxGB: 100
+          maxGB: 50
         },
-        teamMembers: 5,
-        support: 'email'
+        apiAccess: true,
+        support: 'email',
+        dfy: false
+      },
+      max: {
+        name: 'Max',
+        price: {
+          monthly: 199,
+          annual: 1990 // ~17% discount
+        },
+        deployments: {
+          perMonth: 150,
+          concurrent: 15
+        },
+        licenses: 3, // machines
+        instances: {
+          max: 50
+        },
+        storage: {
+          maxGB: 200
+        },
+        apiAccess: true,
+        support: 'priority',
+        dfy: false
       },
       enterprise: {
+        name: 'Enterprise',
+        price: {
+          monthly: null, // Contact sales
+          annual: null
+        },
         deployments: {
           perMonth: -1, // unlimited
           concurrent: -1
         },
+        licenses: -1, // unlimited machines
         instances: {
           max: -1
         },
         storage: {
           maxGB: -1
         },
-        teamMembers: -1,
-        support: 'dedicated'
+        apiAccess: true,
+        support: 'dedicated',
+        dfy: false
+      },
+      dfy: {
+        name: 'Done For You',
+        price: {
+          monthly: 299,
+          annual: 2990 // ~17% discount
+        },
+        deployments: {
+          perMonth: -1, // unlimited
+          concurrent: 10
+        },
+        licenses: 1, // client gets access
+        instances: {
+          max: 25
+        },
+        storage: {
+          maxGB: 100
+        },
+        apiAccess: false,
+        support: 'white-glove',
+        dfy: true, // Super admin access
+        superAdminAccess: true
       }
     };
 

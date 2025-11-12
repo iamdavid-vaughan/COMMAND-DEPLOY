@@ -38,12 +38,27 @@ module.exports = (sequelize) => {
     license_tier: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      defaultValue: 'basic'
+      defaultValue: 'starter'
+    },
+    billing_cycle: {
+      type: DataTypes.STRING(20),
+      allowNull: true, // monthly, annual
+      defaultValue: 'monthly'
     },
     status: {
       type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'active'
+    },
+    role: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'user' // user, admin, super_admin
+    },
+    super_admin_for: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [] // Array of user IDs this admin can manage (for DFY)
     },
     eula_accepted: {
       type: DataTypes.BOOLEAN,

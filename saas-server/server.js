@@ -32,6 +32,7 @@ const deploymentRoutes = require('./routes/deployments');
 const credentialsRoutes = require('./routes/credentials');
 const usageRoutes = require('./routes/usage');
 const billingRoutes = require('./routes/billing');
+const pricingRoutes = require('./routes/pricing');
 const healthRoutes = require('./routes/health');
 
 // Import middleware
@@ -120,6 +121,7 @@ app.use(requestLogger);
  */
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/deployments', authenticate, deploymentRoutes);
 app.use('/api/credentials', authenticate, credentialsRoutes);
 app.use('/api/usage', authenticate, usageRoutes);
