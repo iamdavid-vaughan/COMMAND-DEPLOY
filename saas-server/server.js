@@ -116,6 +116,29 @@ if (NODE_ENV === 'production') {
 }
 app.use(requestLogger);
 
+// Response logging middleware - log all auth responses
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(data) {
+    if (req.path.includes('/auth/')) {
+      console.log(`📤 [RESPONSE] ${req.method} ${req.path} - Status: ${res.statusCode}`);
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.token) {
+          console.log(`📤 [RESPONSE] Token in response: ${parsed.token.substring(0, 20)}... (${parsed.token.length} chars)`);
+        }
+        if (parsed.user) {
+          console.log(`📤 [RESPONSE] User in response:`, JSON.stringify(parsed.user));
+        }
+      } catch (e) {
+        // Not JSON, skip
+      }
+    }
+    originalSend.call(this, data);
+  };
+  next();
+});
+
 /**
  * API Routes
  */
