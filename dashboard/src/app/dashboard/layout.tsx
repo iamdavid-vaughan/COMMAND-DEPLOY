@@ -24,7 +24,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, logout, initAuth } = useAuthStore();
+  const { user, isInitialized, logout, initAuth } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -32,17 +32,21 @@ export default function DashboardLayout({
   }, []); // Only run once on mount
 
   useEffect(() => {
+    // Only redirect after auth has been initialized
+    if (!isInitialized) return;
+
     if (!user) {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [user, isInitialized, router]);
 
   const handleLogout = () => {
     logout();
     router.push('/login');
   };
 
-  if (!user) {
+  // Show loading while initializing or if no user
+  if (!isInitialized || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

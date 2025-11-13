@@ -6,20 +6,23 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, initAuth } = useAuthStore();
+  const { user, isInitialized, initAuth } = useAuthStore();
 
   useEffect(() => {
     initAuth();
   }, []); // Only run once on mount
 
   useEffect(() => {
+    // Only redirect after auth has been initialized
+    if (!isInitialized) return;
+
     // Redirect based on auth status
     if (user) {
       router.push('/dashboard');
     } else {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [user, isInitialized, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

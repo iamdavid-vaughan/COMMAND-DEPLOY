@@ -18,6 +18,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
 
   // Actions
@@ -33,6 +34,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isLoading: false,
+  isInitialized: false,
   error: null,
 
   login: async (email: string, password: string) => {
@@ -120,17 +122,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (token && userStr) {
         try {
           const user = JSON.parse(userStr);
-          set({ user, token });
+          set({ user, token, isInitialized: true });
           console.log('🔐 [AUTH] initAuth - set state with user and token');
         } catch (e) {
           console.error('🔐 [AUTH] initAuth - failed to parse user data:', e);
           // Invalid stored data, clear it
           localStorage.removeItem('focal_auth_token');
           localStorage.removeItem('focal_user');
+          set({ isInitialized: true });
         }
       } else {
         console.log('🔐 [AUTH] initAuth - no token or user in localStorage');
+        set({ isInitialized: true });
       }
+    } else {
+      set({ isInitialized: true });
     }
   },
 }));
