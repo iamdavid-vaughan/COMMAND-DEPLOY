@@ -87,6 +87,23 @@ export const authAPI = {
   refresh: () => api.post('/api/auth/refresh'),
 };
 
+export const userAPI = {
+  profile: () => api.get('/api/user/profile'),
+
+  updateProfile: (data: {
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+  }) => api.patch('/api/user/profile', data),
+
+  changePassword: (data: {
+    currentPassword: string;
+    newPassword: string;
+  }) => api.post('/api/user/password', data),
+
+  deleteAccount: () => api.delete('/api/user/account'),
+};
+
 export const deploymentsAPI = {
   list: (params?: { status?: string; limit?: number; offset?: number }) =>
     api.get('/api/deployments', { params }),

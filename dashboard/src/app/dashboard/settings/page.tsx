@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { userAPI } from '@/lib/api';
 import {
   Settings as SettingsIcon,
   User,
@@ -105,11 +106,11 @@ export default function SettingsPage() {
     }
 
     try {
-      // TODO: API call to update password
-      // await api.patch('/api/user/password', passwordData);
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Call API to update password
+      await userAPI.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
 
       setMessage({
         type: 'success',
