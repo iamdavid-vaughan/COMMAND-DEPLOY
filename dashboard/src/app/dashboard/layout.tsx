@@ -71,7 +71,7 @@ export default function DashboardLayout({
   if (user.role === 'super_admin') {
     navigation.splice(6, 0, {
       name: 'Admin Panel',
-      href: '/admin',
+      href: '/dashboard/admin',
       icon: Shield,
     });
   }
