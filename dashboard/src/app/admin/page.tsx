@@ -122,7 +122,7 @@ export default function AdminPage() {
       await adminAPI.updateUser(selectedUser.id, {
         firstName: updatedData.firstName,
         lastName: updatedData.lastName,
-        companyName: updatedData.companyName,
+        companyName: updatedData.companyName ?? undefined,
         licenseTier: updatedData.licenseTier,
         status: updatedData.status,
         role: updatedData.role,
