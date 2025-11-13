@@ -7,15 +7,14 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
-const db = require('../models');
-
-const User = db.User;
+const { getModels } = require('../models');
 
 /**
  * GET /api/user/profile - Get current user's profile
  */
 router.get('/profile', authenticate, async (req, res, next) => {
   try {
+    const { User } = getModels();
     const user = await User.findByPk(req.user.userId);
 
     if (!user) {
@@ -65,6 +64,7 @@ router.patch('/profile',
         return res.status(400).json({ errors: errors.array() });
       }
 
+      const { User } = getModels();
       const user = await User.findByPk(req.user.userId);
 
       if (!user) {
@@ -131,6 +131,7 @@ router.post('/password',
       console.log(`🔐 [USER] Password change requested for user ${req.user.userId}`);
 
       // Find user
+      const { User } = getModels();
       const user = await User.findByPk(req.user.userId);
 
       if (!user) {
@@ -179,6 +180,7 @@ router.post('/password',
  */
 router.delete('/account', authenticate, async (req, res, next) => {
   try {
+    const { User } = getModels();
     const user = await User.findByPk(req.user.userId);
 
     if (!user) {
