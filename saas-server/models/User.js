@@ -75,6 +75,14 @@ module.exports = (sequelize) => {
     last_login_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    password_reset_token: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    password_reset_expires: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'users',
@@ -89,6 +97,9 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['license_tier']
+      },
+      {
+        fields: ['password_reset_token']
       }
     ]
   });

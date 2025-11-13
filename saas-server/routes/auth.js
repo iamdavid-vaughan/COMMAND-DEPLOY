@@ -18,9 +18,11 @@
 
 const express = require('express');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const { generateToken, refreshToken } = require('../middleware/auth');
 const { getModels } = require('../models');
+const { sendPasswordResetEmail, sendWelcomeEmail } = require('../services/email');
 
 const router = express.Router();
 
@@ -226,12 +228,39 @@ router.post('/forgot-password',
       }
 
       const { email } = req.body;
+      const { User } = getModels();
 
-      // TODO: Generate password reset token
-      // TODO: Send password reset email
+      // Find user
+      const user = await User.findOne({ where: { email } });
+
+      if (user) {
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+        const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        // Save hashed token to database
+        user.password_reset_token = resetTokenHash;
+        user.password_reset_expires = resetTokenExpires;
+        await user.save();
+
+        console.log(`🔐 [AUTH] Password reset requested for ${email}`);
+
+        // Send reset email (don't await to avoid timing attacks)
+        sendPasswordResetEmail(
+          email,
+          resetToken, // Send unhashed token in email
+          `${user.first_name} ${user.last_name}`.trim()
+        ).catch(err => {
+          console.error('❌ [AUTH] Error sending reset email:', err);
+        });
+      } else {
+        console.log(`⚠️  [AUTH] Password reset requested for non-existent email: ${email}`);
+      }
 
       // Always return success to prevent email enumeration
       res.json({
+        success: true,
         message: 'If an account exists with that email, a password reset link has been sent.'
       });
 
@@ -248,21 +277,60 @@ router.post('/forgot-password',
 router.post('/reset-password',
   [
     body('token').notEmpty(),
-    body('password').isLength({ min: 8 })
+    body('password').isLength({ min: 12 }).withMessage('Password must be at least 12 characters')
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+      .withMessage('Password must contain uppercase, lowercase, number, and special character (@$!%*?&)')
   ],
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: errors.array()[0].msg,
+          errors: errors.array()
+        });
       }
 
       const { token, password } = req.body;
+      const { User } = getModels();
+      const { Op } = require('sequelize');
 
-      // TODO: Verify reset token
-      // TODO: Update password in database
+      // Hash the token to compare with database
+      const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+      // Find user with valid reset token
+      const user = await User.findOne({
+        where: {
+          password_reset_token: resetTokenHash,
+          password_reset_expires: {
+            [Op.gt]: new Date() // Token not expired
+          }
+        }
+      });
+
+      if (!user) {
+        console.log('⚠️  [AUTH] Invalid or expired reset token');
+        return res.status(400).json({
+          error: 'Invalid Token',
+          message: 'Password reset token is invalid or has expired'
+        });
+      }
+
+      // Hash new password
+      const saltRounds = 10;
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+
+      // Update password and clear reset token
+      user.password_hash = passwordHash;
+      user.password_reset_token = null;
+      user.password_reset_expires = null;
+      await user.save();
+
+      console.log(`✅ [AUTH] Password reset successful for ${user.email}`);
 
       res.json({
+        success: true,
         message: 'Password reset successful. You can now log in with your new password.'
       });
 

@@ -113,7 +113,9 @@ router.post('/password',
   authenticate,
   [
     body('currentPassword').notEmpty().withMessage('Current password is required'),
-    body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters')
+    body('newPassword').isLength({ min: 12 }).withMessage('Password must be at least 12 characters')
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+      .withMessage('Password must contain uppercase, lowercase, number, and special character (@$!%*?&)')
   ],
   async (req, res, next) => {
     try {

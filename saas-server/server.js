@@ -29,6 +29,7 @@ const chalk = require('chalk');
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
+const adminRoutes = require('./routes/admin');
 const deploymentRoutes = require('./routes/deployments');
 const credentialsRoutes = require('./routes/credentials');
 const usageRoutes = require('./routes/usage');
@@ -147,6 +148,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/user', authenticate, userRoutes);
+app.use('/api/admin', authenticate, adminRoutes);
 app.use('/api/deployments', authenticate, deploymentRoutes);
 app.use('/api/credentials', authenticate, credentialsRoutes);
 app.use('/api/usage', authenticate, usageRoutes);
@@ -165,6 +167,7 @@ app.get('/', (req, res) => {
       health: '/api/health',
       auth: '/api/auth',
       user: '/api/user',
+      admin: '/api/admin',
       deployments: '/api/deployments',
       credentials: '/api/credentials',
       usage: '/api/usage',
