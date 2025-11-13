@@ -21,13 +21,17 @@ api.interceptors.request.use(
     // Get token from localStorage
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('focal_auth_token');
+      console.log(`🌐 [API] Request to ${config.url} - Token:`, token ? `${token.substring(0, 20)}... (${token.length} chars)` : 'NO TOKEN');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.warn(`🌐 [API] No token found for request to ${config.url}`);
       }
     }
     return config;
   },
   (error) => {
+    console.error('🌐 [API] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
