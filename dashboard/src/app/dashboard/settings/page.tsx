@@ -84,10 +84,12 @@ export default function SettingsPage() {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔐 [SETTINGS] Password change form submitted');
     setSaving(true);
     setMessage(null);
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
+      console.log('❌ [SETTINGS] Passwords do not match');
       setMessage({
         type: 'error',
         text: 'New passwords do not match',
@@ -97,6 +99,7 @@ export default function SettingsPage() {
     }
 
     if (passwordData.newPassword.length < 8) {
+      console.log('❌ [SETTINGS] Password too short');
       setMessage({
         type: 'error',
         text: 'Password must be at least 8 characters',
@@ -106,11 +109,12 @@ export default function SettingsPage() {
     }
 
     try {
-      // Call API to update password
-      await userAPI.changePassword({
+      console.log('🔐 [SETTINGS] Calling userAPI.changePassword...');
+      const response = await userAPI.changePassword({
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
+      console.log('✅ [SETTINGS] Password change response:', response.data);
 
       setMessage({
         type: 'success',
@@ -124,6 +128,9 @@ export default function SettingsPage() {
         confirmPassword: '',
       });
     } catch (err: any) {
+      console.error('❌ [SETTINGS] Password change error:', err);
+      console.error('❌ [SETTINGS] Error response:', err.response);
+      console.error('❌ [SETTINGS] Error message:', err.response?.data?.message);
       setMessage({
         type: 'error',
         text: err.response?.data?.message || 'Failed to update password',
