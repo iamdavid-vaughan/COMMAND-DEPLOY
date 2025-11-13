@@ -15,6 +15,7 @@ function initializeModels() {
   // Initialize models
   const User = require('./User')(sequelize);
   const Deployment = require('./Deployment')(sequelize);
+  const DeploymentLog = require('./DeploymentLog')(sequelize);
   const EncryptedCredential = require('./EncryptedCredential')(sequelize);
   const UsageTracking = require('./UsageTracking')(sequelize);
   const ApiKey = require('./ApiKey')(sequelize);
@@ -56,9 +57,19 @@ function initializeModels() {
     as: 'user'
   });
 
+  Deployment.hasMany(DeploymentLog, {
+    foreignKey: 'deployment_id',
+    as: 'logs'
+  });
+  DeploymentLog.belongsTo(Deployment, {
+    foreignKey: 'deployment_id',
+    as: 'deployment'
+  });
+
   models = {
     User,
     Deployment,
+    DeploymentLog,
     EncryptedCredential,
     UsageTracking,
     ApiKey,

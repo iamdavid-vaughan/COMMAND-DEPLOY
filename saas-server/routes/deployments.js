@@ -386,25 +386,25 @@ router.get('/:id/logs',
         });
       }
 
-      // TODO: Fetch actual deployment logs from CloudWatch or log files
-      // For now, return a stub response
+      // Fetch deployment logs
+      const { DeploymentLog } = getModels();
+      const logs = await DeploymentLog.findAll({
+        where: {
+          deployment_id: deploymentId
+        },
+        order: [['created_at', 'ASC']],
+        attributes: ['id', 'level', 'message', 'metadata', 'created_at']
+      });
 
       res.json({
         success: true,
-        logs: [
-          {
-            timestamp: deployment.started_at,
-            level: 'info',
-            message: 'Deployment started'
-          },
-          {
-            timestamp: deployment.completed_at || new Date(),
-            level: deployment.status === 'failed' ? 'error' : 'info',
-            message: deployment.status === 'failed'
-              ? deployment.error_message || 'Deployment failed'
-              : `Deployment ${deployment.status}`
-          }
-        ]
+        logs: logs.map(log => ({
+          id: log.id,
+          timestamp: log.created_at,
+          level: log.level,
+          message: log.message,
+          metadata: log.metadata
+        }))
       });
 
     } catch (error) {

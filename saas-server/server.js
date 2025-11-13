@@ -46,6 +46,7 @@ const { authenticate } = require('./middleware/auth');
 const { initializeDatabase } = require('./services/database');
 const { initializeRedis } = require('./services/redis');
 const { initializeModels } = require('./models');
+const { startWorker } = require('./services/deploymentWorker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -214,6 +215,14 @@ async function startServer() {
     await initializeRedis();
     console.log(chalk.green('✅ Redis connected\n'));
 
+    // Start Deployment Worker
+    console.log(chalk.gray('🔄 Starting deployment worker...'));
+    const stopWorker = startWorker(30000); // Poll every 30 seconds
+    console.log(chalk.green('✅ Deployment worker started\n'));
+
+    // Store stopWorker function for graceful shutdown
+    global.stopDeploymentWorker = stopWorker;
+
     // Start Server
     app.listen(PORT, () => {
       console.log(chalk.bold.green(`✅ Server running on port ${PORT}`));
@@ -234,11 +243,17 @@ async function startServer() {
  */
 process.on('SIGTERM', () => {
   console.log(chalk.yellow('\n⚠️  SIGTERM received, shutting down gracefully...'));
+  if (global.stopDeploymentWorker) {
+    global.stopDeploymentWorker();
+  }
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   console.log(chalk.yellow('\n⚠️  SIGINT received, shutting down gracefully...'));
+  if (global.stopDeploymentWorker) {
+    global.stopDeploymentWorker();
+  }
   process.exit(0);
 });
 

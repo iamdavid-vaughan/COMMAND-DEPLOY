@@ -4,17 +4,23 @@
 
 const nodemailer = require('nodemailer');
 
-// Create transporter
-// TODO: Configure with actual SMTP credentials for focuswithfocal.com
-const transporter = nodemailer.createTransporter({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER, // e.g., noreply@focuswithfocal.com
-    pass: process.env.SMTP_PASS
+// Lazy-initialize transporter
+let transporter = null;
+
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: process.env.SMTP_PORT || 587,
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: process.env.SMTP_USER, // e.g., noreply@focuswithfocal.com
+        pass: process.env.SMTP_PASS
+      }
+    });
   }
-});
+  return transporter;
+}
 
 /**
  * Send password reset email
@@ -79,7 +85,7 @@ The Focal Deploy Team
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`✅ [EMAIL] Password reset email sent to ${email}:`, info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -154,7 +160,7 @@ The Focal Deploy Team
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`✅ [EMAIL] Welcome email sent to ${email}:`, info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -224,7 +230,7 @@ The Focal Deploy Team
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`✅ [EMAIL] Password changed notification sent to ${email}:`, info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
