@@ -10,14 +10,16 @@ export default function HomePage() {
 
   useEffect(() => {
     initAuth();
+  }, []); // Only run once on mount
 
+  useEffect(() => {
     // Redirect based on auth status
     if (user) {
       router.push('/dashboard');
     } else {
       router.push('/login');
     }
-  }, [user, router, initAuth]);
+  }, [user, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

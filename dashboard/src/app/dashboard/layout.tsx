@@ -29,10 +29,13 @@ export default function DashboardLayout({
 
   useEffect(() => {
     initAuth();
+  }, []); // Only run once on mount
+
+  useEffect(() => {
     if (!user) {
       router.push('/login');
     }
-  }, [user, router, initAuth]);
+  }, [user, router]);
 
   const handleLogout = () => {
     logout();
