@@ -187,4 +187,34 @@ export const pricingAPI = {
   get: (tier: string) => api.get(`/api/pricing/${tier}`),
 };
 
+export const adminAPI = {
+  // User management
+  users: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    tier?: string;
+  }) => api.get('/api/admin/users', { params }),
+
+  getUser: (id: string) => api.get(`/api/admin/users/${id}`),
+
+  updateUser: (id: string, data: {
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+    licenseTier?: string;
+    status?: string;
+    role?: string;
+  }) => api.patch(`/api/admin/users/${id}`, data),
+
+  resetPassword: (id: string, newPassword: string) =>
+    api.post(`/api/admin/users/${id}/reset-password`, { newPassword }),
+
+  deleteUser: (id: string) => api.delete(`/api/admin/users/${id}`),
+
+  // Platform statistics
+  stats: () => api.get('/api/admin/stats'),
+};
+
 export default api;
