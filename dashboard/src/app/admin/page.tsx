@@ -103,7 +103,7 @@ export default function AdminPage() {
 
       // Load stats
       const statsResponse = await adminAPI.stats();
-      setStats(statsResponse.data);
+      setStats(statsResponse.data.stats);
     } catch (err: any) {
       console.error('Error loading admin data:', err);
       setMessage({
