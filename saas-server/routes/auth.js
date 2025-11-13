@@ -163,7 +163,7 @@ router.post('/login',
         superAdminFor: user.super_admin_for || []
       });
 
-      res.json({
+      const responsePayload = {
         message: 'Login successful',
         user: {
           id: user.id,
@@ -175,7 +175,16 @@ router.post('/login',
         },
         token,
         expiresIn: '7d'
-      });
+      };
+
+      console.log('🔐 LOGIN RESPONSE:', JSON.stringify({
+        email: user.email,
+        tokenLength: token ? token.length : 0,
+        tokenPreview: token ? token.substring(0, 20) + '...' : 'NO TOKEN',
+        userId: user.id
+      }, null, 2));
+
+      res.json(responsePayload);
 
     } catch (error) {
       next(error);
