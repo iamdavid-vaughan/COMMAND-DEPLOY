@@ -15,7 +15,7 @@ router.get('/subscription', authenticate, async (req, res) => {
     res.json({
       success: true,
       subscription: {
-        licenseTier: 'basic',
+        licenseTier: 'starter',
         status: 'active',
         billingCycle: 'monthly',
         amount: 29,

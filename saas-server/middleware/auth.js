@@ -145,7 +145,7 @@ function requireTier(requiredTier) {
       });
     }
 
-    const tierOrder = ['basic', 'pro', 'enterprise'];
+    const tierOrder = ['starter', 'pro', 'max', 'enterprise'];
     const userTierIndex = tierOrder.indexOf(userTier.toLowerCase());
     const requiredTierIndex = tierOrder.indexOf(requiredTier.toLowerCase());
 

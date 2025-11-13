@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     company_name VARCHAR(255),
-    license_tier VARCHAR(50) NOT NULL DEFAULT 'basic',
+    license_tier VARCHAR(50) NOT NULL DEFAULT 'starter',
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     eula_accepted BOOLEAN DEFAULT FALSE,
     eula_version VARCHAR(20),

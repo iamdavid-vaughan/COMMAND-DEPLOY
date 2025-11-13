@@ -70,7 +70,7 @@ router.post('/register',
         first_name: firstName,
         last_name: lastName,
         company_name: company || null,
-        license_tier: 'basic',
+        license_tier: 'starter',
         status: 'active'
       });
 

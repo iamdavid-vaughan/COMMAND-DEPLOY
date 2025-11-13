@@ -159,7 +159,7 @@ router.get('/history',
  */
 router.get('/limits', async (req, res, next) => {
   try {
-    const tier = req.user.licenseTier || 'basic';
+    const tier = req.user.licenseTier || 'starter';
 
     // Define tier limits
     const tierLimits = {
