@@ -18,6 +18,8 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
+      // Small delay to ensure localStorage writes complete
+      await new Promise(resolve => setTimeout(resolve, 100));
       router.push('/dashboard');
     } catch (err) {
       // Error is handled in the store
