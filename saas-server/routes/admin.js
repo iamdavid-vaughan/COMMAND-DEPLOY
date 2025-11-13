@@ -303,7 +303,7 @@ router.delete('/users/:id', authenticate, requireSuperAdmin, async (req, res, ne
  */
 router.get('/stats', authenticate, requireSuperAdmin, async (req, res, next) => {
   try {
-    const { User } = getModels();
+    const { User, Deployment } = getModels();
     const { Op } = require('sequelize');
 
     const totalUsers = await User.count();
@@ -327,12 +327,42 @@ router.get('/stats', authenticate, requireSuperAdmin, async (req, res, next) => 
       attributes: ['id']
     });
 
+    // Get total deployments
+    const totalDeployments = await Deployment.count();
+
+    // Calculate total revenue based on license tiers
+    // Monthly pricing: starter=$29, pro=$99, max=$299, enterprise=$999
+    const tierPricing = {
+      starter: 29,
+      pro: 99,
+      max: 299,
+      enterprise: 999
+    };
+
+    const activeUsersByTier = await User.findAll({
+      where: { status: 'active' },
+      attributes: [
+        'license_tier',
+        [require('sequelize').fn('COUNT', '*'), 'count']
+      ],
+      group: ['license_tier']
+    });
+
+    const totalRevenue = activeUsersByTier.reduce((total, row) => {
+      const tier = row.license_tier;
+      const count = parseInt(row.get('count'));
+      const price = tierPricing[tier] || 0;
+      return total + (count * price);
+    }, 0);
+
     res.json({
       success: true,
       stats: {
         totalUsers,
         activeUsers,
         suspendedUsers,
+        totalDeployments,
+        totalRevenue,
         usersByTier: usersByTier.reduce((acc, row) => {
           acc[row.license_tier] = parseInt(row.get('count'));
           return acc;
