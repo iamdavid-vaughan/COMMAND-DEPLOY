@@ -30,7 +30,7 @@ export default function RegisterPage() {
     }
 
     try {
-      await register(formData.name, formData.email, formData.password);
+      await register(formData.email, formData.password, formData.name);
       router.push('/dashboard');
     } catch (err) {
       console.error('Registration failed:', err);

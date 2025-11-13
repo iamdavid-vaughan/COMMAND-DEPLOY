@@ -25,15 +25,17 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 /**
  * Generate JWT token
  */
-function generateToken(user) {
-  const payload = {
-    userId: user.id,
-    email: user.email,
-    licenseTier: user.licenseTier,
+function generateToken(payload) {
+  const tokenPayload = {
+    userId: payload.id || payload.userId,
+    email: payload.email,
+    licenseTier: payload.licenseTier,
+    role: payload.role,
+    superAdminFor: payload.superAdminFor,
     iat: Math.floor(Date.now() / 1000)
   };
 
-  return jwt.sign(payload, JWT_SECRET, {
+  return jwt.sign(tokenPayload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
     issuer: 'focal-deploy-saas',
     audience: 'focal-deploy-cli'
@@ -84,7 +86,9 @@ async function authenticate(req, res, next) {
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
-      licenseTier: decoded.licenseTier
+      licenseTier: decoded.licenseTier,
+      role: decoded.role,
+      superAdminFor: decoded.superAdminFor
     };
 
     // TODO: Optionally fetch full user from database
@@ -115,7 +119,9 @@ async function optionalAuth(req, res, next) {
       req.user = {
         userId: decoded.userId,
         email: decoded.email,
-        licenseTier: decoded.licenseTier
+        licenseTier: decoded.licenseTier,
+        role: decoded.role,
+        superAdminFor: decoded.superAdminFor
       };
     }
   } catch (error) {
@@ -259,7 +265,9 @@ function refreshToken(req, res) {
     const newToken = generateToken({
       id: decoded.userId,
       email: decoded.email,
-      licenseTier: decoded.licenseTier
+      licenseTier: decoded.licenseTier,
+      role: decoded.role,
+      superAdminFor: decoded.superAdminFor
     });
 
     res.json({

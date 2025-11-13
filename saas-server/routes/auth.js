@@ -78,7 +78,9 @@ router.post('/register',
       const token = generateToken({
         id: user.id,
         email: user.email,
-        licenseTier: user.license_tier
+        licenseTier: user.license_tier,
+        role: user.role || 'user',
+        superAdminFor: user.super_admin_for || []
       });
 
       res.status(201).json({
@@ -87,7 +89,9 @@ router.post('/register',
           id: user.id,
           email: user.email,
           name: `${user.first_name} ${user.last_name}`.trim(),
-          licenseTier: user.license_tier
+          licenseTier: user.license_tier,
+          role: user.role || 'user',
+          superAdminFor: user.super_admin_for || []
         },
         token,
         expiresIn: '7d'
@@ -154,7 +158,9 @@ router.post('/login',
       const token = generateToken({
         id: user.id,
         email: user.email,
-        licenseTier: user.license_tier
+        licenseTier: user.license_tier,
+        role: user.role || 'user',
+        superAdminFor: user.super_admin_for || []
       });
 
       res.json({
@@ -163,7 +169,9 @@ router.post('/login',
           id: user.id,
           email: user.email,
           name: `${user.first_name} ${user.last_name}`.trim(),
-          licenseTier: user.license_tier
+          licenseTier: user.license_tier,
+          role: user.role || 'user',
+          superAdminFor: user.super_admin_for || []
         },
         token,
         expiresIn: '7d'
