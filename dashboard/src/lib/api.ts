@@ -117,6 +117,9 @@ export const deploymentsAPI = {
   get: (id: string) =>
     api.get(`/api/deployments/${id}`),
 
+  getById: (id: string) =>
+    api.get(`/api/deployments/${id}`),
+
   create: (data: {
     projectName: string;
     region?: string;
@@ -134,6 +137,9 @@ export const deploymentsAPI = {
 
   delete: (id: string) =>
     api.delete(`/api/deployments/${id}`),
+
+  getLogs: (id: string) =>
+    api.get(`/api/deployments/${id}/logs`),
 
   logs: (id: string) =>
     api.get(`/api/deployments/${id}/logs`),
