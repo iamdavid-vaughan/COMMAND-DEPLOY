@@ -65,15 +65,15 @@ export default function NewDeploymentWizardPage() {
 
     // Step 2: Server
     operatingSystem: 'ubuntu-22.04',
-    serverUsername: 'ubuntu',
-    sshPort: 22,
+    deploymentUsername: 'deploy', // Changed from serverUsername - custom deployment user
+    sshPort: 2847, // CRITICAL: Changed from 22 - port 22 gets closed during deployment!
 
     // Step 3: Security
     enableSshHardening: true,
     enableFail2ban: true,
     enableAutoUpdates: true,
     enableFirewall: true,
-    allowedPorts: [22, 80, 443],
+    allowedPorts: [2847, 80, 443], // Use custom SSH port, not 22!
 
     // Step 4: Application
     applicationType: 'nodejs',
@@ -112,7 +112,7 @@ export default function NewDeploymentWizardPage() {
         configuration: {
           server: {
             os: formData.operatingSystem,
-            username: formData.serverUsername,
+            deploymentUsername: formData.deploymentUsername,
             sshPort: formData.sshPort,
           },
           security: {
@@ -121,6 +121,7 @@ export default function NewDeploymentWizardPage() {
             autoUpdates: formData.enableAutoUpdates,
             firewall: formData.enableFirewall,
             allowedPorts: formData.allowedPorts,
+            customSSHPort: formData.sshPort, // Explicitly add custom SSH port
           },
           application: {
             type: formData.applicationType,
@@ -331,14 +332,7 @@ export default function NewDeploymentWizardPage() {
                       name="os"
                       value={os.value}
                       checked={formData.operatingSystem === os.value}
-                      onChange={(e) => {
-                        const newOs = e.target.value;
-                        setFormData({
-                          ...formData,
-                          operatingSystem: newOs,
-                          serverUsername: newOs.startsWith('ubuntu') ? 'ubuntu' : 'ec2-user',
-                        });
-                      }}
+                      onChange={(e) => setFormData({ ...formData, operatingSystem: e.target.value })}
                       className="mr-3"
                     />
                     <span className="text-sm text-gray-900">{os.label}</span>
@@ -353,33 +347,65 @@ export default function NewDeploymentWizardPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Server Username</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Deployment Username <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
-                value={formData.serverUsername}
-                onChange={(e) => setFormData({ ...formData, serverUsername: e.target.value })}
-                placeholder="ubuntu"
+                value={formData.deploymentUsername}
+                onChange={(e) => setFormData({ ...formData, deploymentUsername: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })}
+                placeholder="deploy"
+                pattern="[a-z][a-z0-9_-]*"
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="mt-1 text-sm text-gray-500">
-                Default user for SSH access (ubuntu for Ubuntu, ec2-user for Amazon Linux)
+                Custom deployment user (lowercase letters, numbers, hyphens, underscores only).
               </p>
+              {['ubuntu', 'ec2-user', 'admin', 'root'].includes(formData.deploymentUsername) && (
+                <p className="mt-1 text-sm text-red-600 font-medium">
+                  ❌ Cannot use OS default usernames ('ubuntu', 'ec2-user', 'admin', 'root'). Choose a different name.
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">SSH Port</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom SSH Port <span className="text-red-500">*</span>
+              </label>
               <input
                 type="number"
                 value={formData.sshPort}
-                onChange={(e) => setFormData({ ...formData, sshPort: parseInt(e.target.value) })}
-                placeholder="22"
-                min="1"
+                onChange={(e) => {
+                  const port = parseInt(e.target.value);
+                  setFormData({
+                    ...formData,
+                    sshPort: port,
+                    allowedPorts: [port, 80, 443],
+                  });
+                }}
+                placeholder="2847"
+                min="1024"
                 max="65535"
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-              <p className="mt-1 text-sm text-gray-500">
-                Default is 22. Consider using a non-standard port for additional security.
+              <p className="mt-1 text-sm text-amber-600 font-medium">
+                ⚠️ IMPORTANT: Port 22 is NEVER used for security reasons. Port 22 will be automatically closed during deployment.
               </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Recommended: 2847 (default). Must be between 1024-65535 and not a commonly used port.
+              </p>
+              {formData.sshPort === 22 && (
+                <p className="mt-1 text-sm text-red-600 font-medium">
+                  ❌ Port 22 is not allowed! Please use a custom port like 2847.
+                </p>
+              )}
+              {[80, 443, 25, 53, 110, 143, 993, 995].includes(formData.sshPort) && (
+                <p className="mt-1 text-sm text-yellow-600">
+                  ⚠️ This port is commonly used by other services. Consider using a different port.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -666,12 +692,12 @@ export default function NewDeploymentWizardPage() {
                     <dd className="text-gray-900">{OS_OPTIONS.find(os => os.value === formData.operatingSystem)?.label}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-gray-600">Username:</dt>
-                    <dd className="text-gray-900">{formData.serverUsername}</dd>
+                    <dt className="text-gray-600">Deployment User:</dt>
+                    <dd className="text-gray-900 font-mono">{formData.deploymentUsername}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-gray-600">SSH Port:</dt>
-                    <dd className="text-gray-900">{formData.sshPort}</dd>
+                    <dt className="text-gray-600">Custom SSH Port:</dt>
+                    <dd className="text-gray-900 font-mono">{formData.sshPort}</dd>
                   </div>
                 </dl>
               </div>
