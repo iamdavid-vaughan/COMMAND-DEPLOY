@@ -84,115 +84,6 @@ Intrusion prevention system status:
 - **Activity Logs**: Recent ban/unban events with timestamps
 - **Protection Coverage**: Shows protected services (SSH, HTTP, etc.)
 
-### 📋 Security Audit Logs
-```bash
-focal-deploy audit-logs
-```
-
-View comprehensive security audit logs that track all sensitive actions:
-- **Authentication Events**: SSH logins, API authentication attempts
-- **Deployment Actions**: All deployment operations and their outcomes
-- **Configuration Changes**: Security setting modifications
-- **Credential Access**: When credentials are read, written, or deleted
-- **Resource Management**: Creation and deletion of AWS resources
-- **Password Changes**: System and application password modifications
-
-**Filtering Options:**
-```bash
-# View failed actions only
-focal-deploy audit-logs --failed
-
-# Filter by category
-focal-deploy audit-logs --category authentication
-
-# Filter by severity
-focal-deploy audit-logs --severity critical
-
-# View logs from last 7 days
-focal-deploy audit-logs --since 7d
-
-# Export to JSON
-focal-deploy audit-logs --format json > audit-export.json
-```
-
-### 📊 Audit Statistics
-```bash
-focal-deploy audit-stats
-```
-
-Displays comprehensive audit log analytics:
-- **Event Summary**: Total events, failed events, success rate
-- **Time-based Analysis**: Activity in last 24 hours, 7 days, 30 days
-- **Category Breakdown**: Events grouped by category
-- **Severity Distribution**: Critical, warning, and info event counts
-- **Top Actions**: Most frequently performed actions
-- **User Activity**: Events per user
-
-### 🔍 Interactive Audit Viewer
-```bash
-focal-deploy audit-interactive
-```
-
-Interactive menu-driven audit log viewer:
-- Browse logs by category (authentication, deployment, security, etc.)
-- View recent activity or failed actions
-- Apply custom filters
-- Export filtered results
-- Clear old logs (with backup)
-
-### 🔐 Password Breach Checker
-```bash
-focal-deploy password-check
-```
-
-Check if passwords have been compromised in known data breaches using the Have I Been Pwned API:
-- **k-Anonymity Model**: Password never leaves your system
-- **Comprehensive Check**: Searches 600+ million compromised passwords
-- **Strength Analysis**: Evaluates password complexity and strength
-- **Security Score**: Overall security rating (0-100)
-- **Recommendations**: Specific steps to improve password security
-
-**Features:**
-- Interactive password entry (masked input)
-- Breach count and severity level
-- Password strength assessment
-- Overall security recommendations
-
-### 🔑 Password Generator
-```bash
-focal-deploy password-generate
-```
-
-Generate cryptographically secure random passwords:
-- **Customizable Length**: 8-128 characters
-- **Character Types**: Configure uppercase, lowercase, numbers, special characters
-- **Automatic Breach Check**: Verify generated password isn't compromised
-- **Clipboard Integration**: Optional copy to clipboard
-- **Education**: Learn about password security best practices
-
-### 📋 Batch Password Check
-```bash
-focal-deploy password-batch-check passwords.txt
-```
-
-Check multiple passwords from a file (one per line):
-- **Batch Processing**: Check multiple passwords efficiently
-- **Summary Report**: Overview of breached vs. safe passwords
-- **Detailed Results**: Individual status for each password
-- **Severity Analysis**: Breach severity levels for each password
-
-### 🛡️ Interactive Password Security Tool
-```bash
-focal-deploy password-security
-```
-
-Comprehensive password security menu:
-- Check passwords for breaches
-- Generate secure passwords
-- Batch check password files
-- Learn about password security best practices
-- Password strength analysis
-
 ## Security Features
 
 ### SSH Hardening
@@ -215,24 +106,6 @@ Comprehensive password security menu:
 - **Custom Jails**: Configurable protection for specific services
 - **IP Banning**: Automatic temporary bans for suspicious activity
 - **Whitelist Support**: Protects trusted IPs from accidental bans
-
-### Security Audit Logging
-- **Comprehensive Tracking**: Logs all sensitive security actions
-- **Authentication Monitoring**: SSH logins, API access, credential usage
-- **Deployment Tracking**: All deployment operations with timestamps
-- **Configuration Auditing**: Security setting changes and modifications
-- **Resource Tracking**: AWS resource creation and deletion
-- **Retention Management**: Configurable log retention (default: 90 days)
-- **Query & Filter**: Advanced filtering by action, category, severity, user
-- **Export Capabilities**: Export logs for compliance and analysis
-
-### Password Security
-- **Breach Detection**: Integration with Have I Been Pwned API
-- **k-Anonymity Model**: Passwords never transmitted over network
-- **Strength Analysis**: Comprehensive password strength evaluation
-- **Secure Generation**: Cryptographically secure password generation
-- **Batch Checking**: Check multiple passwords efficiently
-- **Education**: Built-in password security best practices guide
 
 ### Automatic Updates
 - **Security Patches**: Automatic installation of security updates
@@ -342,6 +215,114 @@ The security implementation follows defense-in-depth principles:
 - Principle of least privilege
 
 This comprehensive security framework ensures your focal-deploy instances are protected against common threats while remaining accessible and manageable for users of all skill levels.
+### 📋 Security Audit Logs
+```bash
+focal-deploy audit-logs
+```
+
+View comprehensive security audit logs that track all sensitive actions:
+- **Authentication Events**: SSH logins, API authentication attempts
+- **Deployment Actions**: All deployment operations and their outcomes
+- **Configuration Changes**: Security setting modifications
+- **Credential Access**: When credentials are read, written, or deleted
+- **Resource Management**: Creation and deletion of AWS resources
+- **Password Changes**: System and application password modifications
+
+**Filtering Options:**
+```bash
+# View failed actions only
+focal-deploy audit-logs --failed
+
+# Filter by category
+focal-deploy audit-logs --category authentication
+
+# Filter by severity
+focal-deploy audit-logs --severity critical
+
+# View logs from last 7 days
+focal-deploy audit-logs --since 7d
+
+# Export to JSON
+focal-deploy audit-logs --format json > audit-export.json
+```
+
+### 📊 Audit Statistics
+```bash
+focal-deploy audit-stats
+```
+
+Displays comprehensive audit log analytics:
+- **Event Summary**: Total events, failed events, success rate
+- **Time-based Analysis**: Activity in last 24 hours, 7 days, 30 days
+- **Category Breakdown**: Events grouped by category
+- **Severity Distribution**: Critical, warning, and info event counts
+- **Top Actions**: Most frequently performed actions
+- **User Activity**: Events per user
+
+### 🔍 Interactive Audit Viewer
+```bash
+focal-deploy audit-interactive
+```
+
+Interactive menu-driven audit log viewer:
+- Browse logs by category (authentication, deployment, security, etc.)
+- View recent activity or failed actions
+- Apply custom filters
+- Export filtered results
+- Clear old logs (with backup)
+
+### 🔐 Password Breach Checker
+```bash
+focal-deploy password-check
+```
+
+Check if passwords have been compromised in known data breaches using the Have I Been Pwned API:
+- **k-Anonymity Model**: Password never leaves your system
+- **Comprehensive Check**: Searches 600+ million compromised passwords
+- **Strength Analysis**: Evaluates password complexity and strength
+- **Security Score**: Overall security rating (0-100)
+- **Recommendations**: Specific steps to improve password security
+
+**Features:**
+- Interactive password entry (masked input)
+- Breach count and severity level
+- Password strength assessment
+- Overall security recommendations
+
+### 🔑 Password Generator
+```bash
+focal-deploy password-generate
+```
+
+Generate cryptographically secure random passwords:
+- **Customizable Length**: 8-128 characters
+- **Character Types**: Configure uppercase, lowercase, numbers, special characters
+- **Automatic Breach Check**: Verify generated password isn't compromised
+- **Clipboard Integration**: Optional copy to clipboard
+- **Education**: Learn about password security best practices
+
+### 📋 Batch Password Check
+```bash
+focal-deploy password-batch-check passwords.txt
+```
+
+Check multiple passwords from a file (one per line):
+- **Batch Processing**: Check multiple passwords efficiently
+- **Summary Report**: Overview of breached vs. safe passwords
+- **Detailed Results**: Individual status for each password
+- **Severity Analysis**: Breach severity levels for each password
+
+### 🛡️ Interactive Password Security Tool
+```bash
+focal-deploy password-security
+```
+
+Comprehensive password security menu:
+- Check passwords for breaches
+- Generate secure passwords
+- Batch check password files
+- Learn about password security best practices
+- Password strength analysis
 
 ## Audit Log Features
 
@@ -498,4 +479,3 @@ await auditIntegration.logPasswordChange(
 );
 ```
 
-This comprehensive security framework ensures your focal-deploy instances are protected against common threats while remaining accessible and manageable for users of all skill levels.

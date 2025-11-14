@@ -155,3 +155,7 @@ logs
 # AWS credentials (should never be committed)
 aws-credentials.json
 credentials.json
+
+# Test directory
+focal-test/
+saas-server-deploy.tar.gz

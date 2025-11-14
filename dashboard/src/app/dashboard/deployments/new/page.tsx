@@ -1,0 +1,805 @@
+'use client';
+
+import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { deploymentsAPI } from '@/lib/api';
+import {
+  Rocket, ChevronRight, ChevronLeft, Server, Shield,
+  GitBranch, Globe, CheckCircle, AlertCircle, X
+} from 'lucide-react';
+
+// Wizard Steps
+const STEPS = [
+  { id: 1, name: 'Project', icon: Rocket },
+  { id: 2, name: 'Server', icon: Server },
+  { id: 3, name: 'Security', icon: Shield },
+  { id: 4, name: 'Application', icon: GitBranch },
+  { id: 5, name: 'Domain & SSL', icon: Globe },
+  { id: 6, name: 'Review', icon: CheckCircle },
+];
+
+const AWS_REGIONS = [
+  { value: 'us-east-1', label: 'US East (N. Virginia)' },
+  { value: 'us-east-2', label: 'US East (Ohio)' },
+  { value: 'us-west-1', label: 'US West (N. California)' },
+  { value: 'us-west-2', label: 'US West (Oregon)' },
+  { value: 'eu-west-1', label: 'EU (Ireland)' },
+  { value: 'eu-central-1', label: 'EU (Frankfurt)' },
+  { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
+  { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
+];
+
+const INSTANCE_TYPES = [
+  { value: 't3.micro', label: 't3.micro - 1 vCPU, 1GB RAM (Free Tier)', cost: '$0/mo*' },
+  { value: 't3.small', label: 't3.small - 2 vCPU, 2GB RAM', cost: '$15/mo' },
+  { value: 't3.medium', label: 't3.medium - 2 vCPU, 4GB RAM', cost: '$30/mo' },
+  { value: 't3.large', label: 't3.large - 2 vCPU, 8GB RAM', cost: '$60/mo' },
+  { value: 'm5.large', label: 'm5.large - 2 vCPU, 8GB RAM', cost: '$70/mo' },
+];
+
+const OS_OPTIONS = [
+  { value: 'ubuntu-22.04', label: 'Ubuntu 22.04 LTS', recommended: true },
+  { value: 'ubuntu-20.04', label: 'Ubuntu 20.04 LTS' },
+  { value: 'amazon-linux-2', label: 'Amazon Linux 2' },
+];
+
+const APP_TYPES = [
+  { value: 'nodejs', label: 'Node.js', ports: [3000, 8080] },
+  { value: 'python', label: 'Python (Flask/Django)', ports: [5000, 8000] },
+  { value: 'static', label: 'Static Site', ports: [80] },
+  { value: 'docker', label: 'Docker Container', ports: [8080] },
+];
+
+export default function NewDeploymentWizardPage() {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Wizard form data
+  const [formData, setFormData] = useState({
+    // Step 1: Project
+    projectName: '',
+    region: 'us-east-1',
+    instanceType: 't3.micro',
+
+    // Step 2: Server
+    operatingSystem: 'ubuntu-22.04',
+    serverUsername: 'ubuntu',
+    sshPort: 22,
+
+    // Step 3: Security
+    enableSshHardening: true,
+    enableFail2ban: true,
+    enableAutoUpdates: true,
+    enableFirewall: true,
+    allowedPorts: [22, 80, 443],
+
+    // Step 4: Application
+    applicationType: 'nodejs',
+    githubRepo: '',
+    githubBranch: 'main',
+    applicationPort: 3000,
+    envVars: [] as { key: string; value: string }[],
+
+    // Step 5: Domain & SSL
+    customDomain: '',
+    enableSsl: false,
+    sslEmail: '',
+  });
+
+  const handleNext = () => {
+    if (currentStep < STEPS.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const payload = {
+        projectName: formData.projectName,
+        region: formData.region,
+        instanceType: formData.instanceType,
+        configuration: {
+          server: {
+            os: formData.operatingSystem,
+            username: formData.serverUsername,
+            sshPort: formData.sshPort,
+          },
+          security: {
+            sshHardening: formData.enableSshHardening,
+            fail2ban: formData.enableFail2ban,
+            autoUpdates: formData.enableAutoUpdates,
+            firewall: formData.enableFirewall,
+            allowedPorts: formData.allowedPorts,
+          },
+          application: {
+            type: formData.applicationType,
+            githubRepo: formData.githubRepo,
+            githubBranch: formData.githubBranch,
+            port: formData.applicationPort,
+            envVars: formData.envVars,
+          },
+          domain: formData.customDomain ? {
+            name: formData.customDomain,
+            ssl: formData.enableSsl,
+            sslEmail: formData.sslEmail,
+          } : null,
+        },
+      };
+
+      await deploymentsAPI.create(payload);
+
+      setMessage({
+        type: 'success',
+        text: 'Deployment created successfully! Redirecting to deployments...',
+      });
+
+      setTimeout(() => {
+        router.push('/dashboard/deployments');
+      }, 1500);
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to create deployment',
+      });
+      setLoading(false);
+    }
+  };
+
+  const addEnvVar = () => {
+    setFormData({
+      ...formData,
+      envVars: [...formData.envVars, { key: '', value: '' }],
+    });
+  };
+
+  const removeEnvVar = (index: number) => {
+    setFormData({
+      ...formData,
+      envVars: formData.envVars.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateEnvVar = (index: number, field: 'key' | 'value', value: string) => {
+    const newEnvVars = [...formData.envVars];
+    newEnvVars[index][field] = value;
+    setFormData({ ...formData, envVars: newEnvVars });
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <Rocket className="w-8 h-8 text-blue-600" />
+          <h1 className="text-3xl font-bold text-gray-900">New Deployment</h1>
+        </div>
+        <p className="text-gray-500">Complete deployment wizard with full server configuration</p>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          {STEPS.map((step, index) => {
+            const Icon = step.icon;
+            const isActive = currentStep === step.id;
+            const isCompleted = currentStep > step.id;
+
+            return (
+              <div key={step.id} className="flex items-center">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                      isActive
+                        ? 'border-blue-600 bg-blue-50 text-blue-600'
+                        : isCompleted
+                        ? 'border-green-600 bg-green-50 text-green-600'
+                        : 'border-gray-300 bg-white text-gray-400'
+                    }`}
+                  >
+                    {isCompleted ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+                  </div>
+                  <span
+                    className={`mt-2 text-xs font-medium ${
+                      isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'
+                    }`}
+                  >
+                    {step.name}
+                  </span>
+                </div>
+                {index < STEPS.length - 1 && (
+                  <div
+                    className={`w-12 h-0.5 mx-2 mb-6 ${
+                      isCompleted ? 'bg-green-600' : 'bg-gray-300'
+                    }`}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div
+          className={`p-4 rounded-lg flex items-center gap-2 ${
+            message.type === 'success'
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}
+        >
+          {message.type === 'success' ? (
+            <CheckCircle className="w-5 h-5" />
+          ) : (
+            <AlertCircle className="w-5 h-5" />
+          )}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {/* Step Content */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 min-h-96">
+        {currentStep === 1 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Project Configuration</h2>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Project Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.projectName}
+                onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
+                placeholder="my-awesome-app"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Alphanumeric and hyphens only. Used for AWS resource naming.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">AWS Region</label>
+              <select
+                value={formData.region}
+                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {AWS_REGIONS.map((region) => (
+                  <option key={region.value} value={region.value}>
+                    {region.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Instance Type</label>
+              <div className="space-y-2">
+                {INSTANCE_TYPES.map((type) => (
+                  <label
+                    key={type.value}
+                    className="flex items-center justify-between p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
+                  >
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        name="instanceType"
+                        value={type.value}
+                        checked={formData.instanceType === type.value}
+                        onChange={(e) => setFormData({ ...formData, instanceType: e.target.value })}
+                        className="mr-3"
+                      />
+                      <span className="text-sm text-gray-900">{type.label}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">{type.cost}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-500">* Free tier: 750 hours/month for first 12 months</p>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Server Configuration</h2>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Operating System</label>
+              <div className="space-y-2">
+                {OS_OPTIONS.map((os) => (
+                  <label
+                    key={os.value}
+                    className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="radio"
+                      name="os"
+                      value={os.value}
+                      checked={formData.operatingSystem === os.value}
+                      onChange={(e) => {
+                        const newOs = e.target.value;
+                        setFormData({
+                          ...formData,
+                          operatingSystem: newOs,
+                          serverUsername: newOs.startsWith('ubuntu') ? 'ubuntu' : 'ec2-user',
+                        });
+                      }}
+                      className="mr-3"
+                    />
+                    <span className="text-sm text-gray-900">{os.label}</span>
+                    {os.recommended && (
+                      <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                        Recommended
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Server Username</label>
+              <input
+                type="text"
+                value={formData.serverUsername}
+                onChange={(e) => setFormData({ ...formData, serverUsername: e.target.value })}
+                placeholder="ubuntu"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Default user for SSH access (ubuntu for Ubuntu, ec2-user for Amazon Linux)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">SSH Port</label>
+              <input
+                type="number"
+                value={formData.sshPort}
+                onChange={(e) => setFormData({ ...formData, sshPort: parseInt(e.target.value) })}
+                placeholder="22"
+                min="1"
+                max="65535"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Default is 22. Consider using a non-standard port for additional security.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Security Setup</h2>
+
+            <div className="space-y-4">
+              <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={formData.enableSshHardening}
+                  onChange={(e) => setFormData({ ...formData, enableSshHardening: e.target.checked })}
+                  className="mr-3 h-5 w-5"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">SSH Hardening</div>
+                  <div className="text-sm text-gray-500">
+                    Disable root login, password authentication, and configure secure SSH settings
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={formData.enableFail2ban}
+                  onChange={(e) => setFormData({ ...formData, enableFail2ban: e.target.checked })}
+                  className="mr-3 h-5 w-5"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">Fail2ban Protection</div>
+                  <div className="text-sm text-gray-500">
+                    Automatically ban IPs with suspicious activity (brute force attempts)
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={formData.enableAutoUpdates}
+                  onChange={(e) => setFormData({ ...formData, enableAutoUpdates: e.target.checked })}
+                  className="mr-3 h-5 w-5"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">Automatic Security Updates</div>
+                  <div className="text-sm text-gray-500">
+                    Enable unattended-upgrades for automatic security patches
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={formData.enableFirewall}
+                  onChange={(e) => setFormData({ ...formData, enableFirewall: e.target.checked })}
+                  className="mr-3 h-5 w-5"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">UFW Firewall</div>
+                  <div className="text-sm text-gray-500">
+                    Configure uncomplicated firewall with only necessary ports open
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Recommended:</strong> Enable all security features for production deployments.
+                These significantly improve your server's security posture.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Application Setup</h2>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Application Type</label>
+              <select
+                value={formData.applicationType}
+                onChange={(e) => {
+                  const appType = APP_TYPES.find((t) => t.value === e.target.value);
+                  setFormData({
+                    ...formData,
+                    applicationType: e.target.value,
+                    applicationPort: appType?.ports[0] || 3000,
+                  });
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {APP_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                GitHub Repository URL
+              </label>
+              <input
+                type="url"
+                value={formData.githubRepo}
+                onChange={(e) => setFormData({ ...formData, githubRepo: e.target.value })}
+                placeholder="https://github.com/username/repo.git"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Public repository URL. Private repos require SSH key configuration.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+              <input
+                type="text"
+                value={formData.githubBranch}
+                onChange={(e) => setFormData({ ...formData, githubBranch: e.target.value })}
+                placeholder="main"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Application Port</label>
+              <input
+                type="number"
+                value={formData.applicationPort}
+                onChange={(e) => setFormData({ ...formData, applicationPort: parseInt(e.target.value) })}
+                placeholder="3000"
+                min="1"
+                max="65535"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Environment Variables (Optional)
+              </label>
+              <div className="space-y-2">
+                {formData.envVars.map((envVar, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={envVar.key}
+                      onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
+                      placeholder="KEY"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <input
+                      type="text"
+                      value={envVar.value}
+                      onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
+                      placeholder="value"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeEnvVar(index)}
+                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addEnvVar}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  + Add Environment Variable
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 5 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Domain & SSL Configuration</h2>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Domain (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.customDomain}
+                onChange={(e) => setFormData({ ...formData, customDomain: e.target.value })}
+                placeholder="example.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                If provided, we'll configure Nginx for this domain
+              </p>
+            </div>
+
+            {formData.customDomain && (
+              <>
+                <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={formData.enableSsl}
+                    onChange={(e) => setFormData({ ...formData, enableSsl: e.target.checked })}
+                    className="mr-3 h-5 w-5"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">Enable SSL Certificate</div>
+                    <div className="text-sm text-gray-500">
+                      Automatically obtain and configure free Let's Encrypt SSL certificate
+                    </div>
+                  </div>
+                </label>
+
+                {formData.enableSsl && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email for SSL Certificate
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.sslEmail}
+                      onChange={(e) => setFormData({ ...formData, sslEmail: e.target.value })}
+                      placeholder="admin@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Required by Let's Encrypt for certificate notifications
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!formData.customDomain && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-600">
+                  No custom domain configured. Your application will be accessible via the EC2 instance's
+                  public IP address. You can add a domain later through the deployment settings.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentStep === 6 && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold text-gray-900">Review & Deploy</h2>
+
+            <div className="space-y-4">
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Project</h3>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">Name:</dt>
+                    <dd className="text-gray-900 font-medium">{formData.projectName}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">Region:</dt>
+                    <dd className="text-gray-900">{AWS_REGIONS.find(r => r.value === formData.region)?.label}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">Instance:</dt>
+                    <dd className="text-gray-900">{formData.instanceType}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Server</h3>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">OS:</dt>
+                    <dd className="text-gray-900">{OS_OPTIONS.find(os => os.value === formData.operatingSystem)?.label}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">Username:</dt>
+                    <dd className="text-gray-900">{formData.serverUsername}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">SSH Port:</dt>
+                    <dd className="text-gray-900">{formData.sshPort}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Security</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    {formData.enableSshHardening ? <CheckCircle className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-gray-400" />}
+                    <span className={formData.enableSshHardening ? 'text-gray-900' : 'text-gray-500'}>SSH Hardening</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {formData.enableFail2ban ? <CheckCircle className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-gray-400" />}
+                    <span className={formData.enableFail2ban ? 'text-gray-900' : 'text-gray-500'}>Fail2ban</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {formData.enableAutoUpdates ? <CheckCircle className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-gray-400" />}
+                    <span className={formData.enableAutoUpdates ? 'text-gray-900' : 'text-gray-500'}>Auto Updates</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {formData.enableFirewall ? <CheckCircle className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-gray-400" />}
+                    <span className={formData.enableFirewall ? 'text-gray-900' : 'text-gray-500'}>Firewall</span>
+                  </div>
+                </div>
+              </div>
+
+              {formData.githubRepo && (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="font-medium text-gray-900 mb-2">Application</h3>
+                  <dl className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">Type:</dt>
+                      <dd className="text-gray-900">{APP_TYPES.find(t => t.value === formData.applicationType)?.label}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">Repository:</dt>
+                      <dd className="text-gray-900 truncate max-w-xs">{formData.githubRepo}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">Branch:</dt>
+                      <dd className="text-gray-900">{formData.githubBranch}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">Port:</dt>
+                      <dd className="text-gray-900">{formData.applicationPort}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+
+              {formData.customDomain && (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="font-medium text-gray-900 mb-2">Domain & SSL</h3>
+                  <dl className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">Domain:</dt>
+                      <dd className="text-gray-900">{formData.customDomain}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600">SSL:</dt>
+                      <dd className="text-gray-900">{formData.enableSsl ? 'Enabled' : 'Disabled'}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                <strong>Important:</strong> Make sure you have added your AWS credentials in the Credentials section.
+                The deployment will fail without valid AWS credentials.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex justify-between">
+        <button
+          onClick={() => router.push('/dashboard/deployments')}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+
+        <div className="flex gap-3">
+          {currentStep > 1 && (
+            <button
+              onClick={handleBack}
+              disabled={loading}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </button>
+          )}
+
+          {currentStep < STEPS.length ? (
+            <button
+              onClick={handleNext}
+              disabled={!formData.projectName}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={loading || !formData.projectName}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Deploying...
+                </>
+              ) : (
+                <>
+                  <Rocket className="w-4 h-4" />
+                  Deploy Now
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
