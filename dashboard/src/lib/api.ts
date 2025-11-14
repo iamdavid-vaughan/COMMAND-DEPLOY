@@ -229,4 +229,69 @@ export const adminAPI = {
   stats: () => api.get('/api/admin/stats'),
 };
 
+export const auditAPI = {
+  // Query audit logs
+  logs: (params?: {
+    category?: string;
+    severity?: string;
+    action?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get('/api/audit/logs', { params }),
+
+  // Get statistics
+  statistics: () => api.get('/api/audit/statistics'),
+
+  // Log an event
+  log: (data: {
+    action: string;
+    category?: string;
+    severity?: string;
+    metadata?: any;
+    ipAddress?: string;
+  }) => api.post('/api/audit/log', data),
+
+  // Export logs
+  export: (params?: {
+    format?: 'json' | 'csv';
+    category?: string;
+    severity?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => api.post('/api/audit/export', params, {
+    responseType: params?.format === 'csv' ? 'blob' : 'json',
+  }),
+
+  // Clear logs
+  clear: (params?: {
+    olderThan?: string;
+    category?: string;
+  }) => api.delete('/api/audit/clear', { data: params }),
+};
+
+export const passwordSecurityAPI = {
+  // Check password for breaches
+  check: (password: string) =>
+    api.post('/api/password-security/check', { password }),
+
+  // Check password strength only
+  checkStrength: (password: string) =>
+    api.post('/api/password-security/check-strength', { password }),
+
+  // Generate secure password
+  generate: (params?: {
+    length?: number;
+    includeSymbols?: boolean;
+    includeNumbers?: boolean;
+    includeUppercase?: boolean;
+    includeLowercase?: boolean;
+  }) => api.post('/api/password-security/generate', params),
+
+  // Batch check passwords
+  batchCheck: (passwords: string[]) =>
+    api.post('/api/password-security/batch-check', { passwords }),
+};
+
 export default api;

@@ -203,6 +203,24 @@ export default function AdminPage() {
           <p className="mt-2 text-gray-600">Manage users, monitor platform statistics, and system settings</p>
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <a
+            href="/dashboard/admin/security"
+            className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-sm p-6 text-white hover:from-blue-700 hover:to-blue-800 transition-all transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                <Activity className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold">Security Audit</h3>
+            </div>
+            <p className="text-blue-100 text-sm">
+              View audit logs, track sensitive actions, and monitor security events
+            </p>
+          </a>
+        </div>
+
         {/* Message */}
         {message && (
           <div

@@ -61,15 +61,16 @@ export default function DashboardLayout({
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Deployments', href: '/dashboard/deployments', icon: Rocket },
     { name: 'Credentials', href: '/dashboard/credentials', icon: Key },
+    { name: 'Password Security', href: '/dashboard/security', icon: Shield },
     { name: 'Usage', href: '/dashboard/usage', icon: BarChart3 },
     { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
     { name: 'API Docs', href: '/dashboard/api-docs', icon: FileText },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 
-  // Add Admin link if user is super admin
+  // Add Admin links if user is super admin
   if (user.role === 'super_admin') {
-    navigation.splice(6, 0, {
+    navigation.splice(7, 0, {
       name: 'Admin Panel',
       href: '/dashboard/admin',
       icon: Shield,
