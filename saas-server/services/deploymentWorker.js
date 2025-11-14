@@ -4,7 +4,10 @@
 
 const { getModels } = require('../models');
 const { createDeployment, terminateDeployment } = require('./ec2');
-const { decrypt } = require('./encryption');
+const { createDeploymentWithSSH, terminateDeploymentComplete } = require('./ec2Enhanced');
+const { SSHService } = require('./sshService');
+const { ProvisioningScriptGenerator } = require('./provisioningScriptGenerator');
+const { decrypt, encrypt } = require('./encryption');
 
 /**
  * Add log entry for deployment
@@ -28,6 +31,7 @@ async function addLog(deploymentId, level, message, metadata = {}) {
  */
 async function processDeployment(deploymentId) {
   const { Deployment, EncryptedCredential } = getModels();
+  let sshService = null;
 
   try {
     // Fetch deployment
@@ -49,6 +53,7 @@ async function processDeployment(deploymentId) {
     // Update status to running
     await deployment.update({
       status: 'running',
+      started_at: new Date(),
     });
     await addLog(deploymentId, 'info', 'Deployment status updated to running');
 
@@ -78,33 +83,179 @@ async function processDeployment(deploymentId) {
 
     const awsCredentials = JSON.parse(decryptedData);
 
-    // Create EC2 deployment
-    await addLog(deploymentId, 'info', `Creating EC2 instance in ${deployment.region} (${deployment.instance_type})`);
-    const result = await createDeployment(awsCredentials, {
-      region: deployment.region,
-      instanceType: deployment.instance_type,
-      projectName: deployment.project_name,
-      domains: deployment.domains,
-      configuration: deployment.configuration,
-    });
+    // Parse deployment configuration
+    const config = deployment.configuration || {};
+    const server = config.server || {};
+    const security = config.security || {};
+    const application = config.application || {};
+    const domain = config.domain || null;
 
-    await addLog(deploymentId, 'success', `EC2 instance created successfully: ${result.instanceId}`);
-    await addLog(deploymentId, 'success', `Public IP allocated: ${result.publicIp}`);
+    // Check if this is a full provisioning deployment or basic
+    const isFullProvisioning = server.os || application.githubRepo || domain;
 
-    // Update deployment with results
-    await deployment.update({
-      status: 'completed',
-      instance_id: result.instanceId,
-      public_ip: result.publicIp,
-      completed_at: new Date(),
-      error_message: null,
-    });
+    if (!isFullProvisioning) {
+      // Use basic EC2 deployment (backwards compatibility)
+      await addLog(deploymentId, 'info', `Creating basic EC2 instance in ${deployment.region} (${deployment.instance_type})`);
+      const result = await createDeployment(awsCredentials, {
+        region: deployment.region,
+        instanceType: deployment.instance_type,
+        projectName: deployment.project_name,
+        domains: deployment.domains,
+        configuration: deployment.configuration,
+      });
 
-    await addLog(deploymentId, 'success', `Deployment completed successfully`);
+      await addLog(deploymentId, 'success', `EC2 instance created successfully: ${result.instanceId}`);
+      await addLog(deploymentId, 'success', `Public IP allocated: ${result.publicIp}`);
+
+      // Update deployment with results
+      await deployment.update({
+        status: 'completed',
+        instance_id: result.instanceId,
+        public_ip: result.publicIp,
+        completed_at: new Date(),
+        error_message: null,
+      });
+
+      await addLog(deploymentId, 'success', `Deployment completed successfully`);
+    } else {
+      // Full provisioning workflow
+      await addLog(deploymentId, 'info', `Creating EC2 instance with SSH keypair in ${deployment.region}`);
+
+      // Step 1: Create EC2 instance with SSH keypair
+      const ec2Result = await createDeploymentWithSSH(awsCredentials, {
+        region: deployment.region,
+        instanceType: deployment.instance_type,
+        projectName: deployment.project_name,
+        configuration: deployment.configuration,
+      });
+
+      await addLog(deploymentId, 'success', `EC2 instance created: ${ec2Result.instanceId}`);
+      await addLog(deploymentId, 'success', `Public IP: ${ec2Result.publicIp}`);
+      await addLog(deploymentId, 'info', `SSH Username: ${ec2Result.username}`);
+
+      // Update deployment with instance info
+      await deployment.update({
+        instance_id: ec2Result.instanceId,
+        public_ip: ec2Result.publicIp,
+        configuration: {
+          ...deployment.configuration,
+          server: {
+            ...server,
+            username: ec2Result.username,
+            keyPairName: ec2Result.keyPairName,
+          },
+        },
+      });
+
+      // Encrypt and store private key temporarily for SSH access
+      const encryptedKey = encrypt(ec2Result.privateKey, deployment.user_id);
+      await deployment.update({
+        configuration: {
+          ...deployment.configuration,
+          ssh: {
+            keyPairName: ec2Result.keyPairName,
+            username: ec2Result.username,
+            encryptedPrivateKey: encryptedKey.encrypted,
+            keyIv: encryptedKey.iv,
+            keyAuthTag: encryptedKey.authTag,
+            keySalt: encryptedKey.salt,
+          },
+        },
+      });
+
+      // Step 2: Wait for SSH to be ready
+      await addLog(deploymentId, 'info', 'Waiting for SSH service to be ready...');
+      sshService = new SSHService();
+
+      const conn = await sshService.waitForSSH(ec2Result.publicIp, {
+        port: server.sshPort || 22,
+        username: ec2Result.username,
+        privateKey: ec2Result.privateKey,
+      }, 30); // 30 attempts
+
+      await addLog(deploymentId, 'success', 'SSH connection established');
+
+      // Step 3: Generate provisioning script
+      await addLog(deploymentId, 'info', 'Generating provisioning script...');
+      const provisioningScript = ProvisioningScriptGenerator.generate({
+        projectName: deployment.project_name,
+        server: {
+          os: server.os || 'ubuntu-22.04',
+          username: ec2Result.username,
+          sshPort: server.sshPort || 22,
+        },
+        security: {
+          sshHardening: security.sshHardening !== false,
+          firewall: security.firewall !== false,
+          fail2ban: security.fail2ban !== false,
+          autoUpdates: security.autoUpdates !== false,
+          allowedPorts: security.allowedPorts || [server.sshPort || 22, 80, 443, application.port || 3000],
+        },
+        application: {
+          type: application.type || 'nodejs',
+          githubRepo: application.githubRepo,
+          githubBranch: application.githubBranch || 'main',
+          port: application.port || 3000,
+          envVars: application.envVars || [],
+        },
+        domain: domain,
+      });
+
+      // Step 4: Upload provisioning script
+      await addLog(deploymentId, 'info', 'Uploading provisioning script...');
+      const scriptPath = `/home/${ec2Result.username}/focal-deploy-provision.sh`;
+      await sshService.uploadFile(conn, provisioningScript, scriptPath);
+      await addLog(deploymentId, 'success', 'Provisioning script uploaded');
+
+      // Step 5: Make script executable and run it
+      await addLog(deploymentId, 'info', 'Starting server provisioning...');
+      await sshService.executeCommand(conn, `chmod +x ${scriptPath}`, { timeout: 5000 });
+
+      // Execute provisioning script and stream output
+      await addLog(deploymentId, 'info', 'Executing provisioning script (this may take several minutes)...');
+
+      const { exitCode } = await sshService.executeCommandStreaming(
+        conn,
+        `sudo ${scriptPath}`,
+        async (output, stream) => {
+          // Stream output to logs
+          const lines = output.trim().split('\n');
+          for (const line of lines) {
+            if (line.trim()) {
+              const level = stream === 'stderr' ? 'warning' : 'info';
+              await addLog(deploymentId, level, line);
+            }
+          }
+        },
+        { timeout: 600000 } // 10 minute timeout for provisioning
+      );
+
+      if (exitCode !== 0) {
+        throw new Error(`Provisioning script failed with exit code ${exitCode}`);
+      }
+
+      await addLog(deploymentId, 'success', 'Server provisioning completed successfully');
+
+      // Disconnect SSH
+      sshService.disconnect(conn);
+
+      // Update deployment status to completed
+      await deployment.update({
+        status: 'completed',
+        completed_at: new Date(),
+        error_message: null,
+      });
+
+      await addLog(deploymentId, 'success', 'Deployment completed successfully!');
+      await addLog(deploymentId, 'info', `Server ready at: ${ec2Result.publicIp}`);
+      if (domain && domain.name) {
+        await addLog(deploymentId, 'info', `Domain: https://${domain.name}`);
+      }
+    }
 
     console.log(`✅ [WORKER] Deployment completed: ${deploymentId}`);
-    console.log(`   Instance ID: ${result.instanceId}`);
-    console.log(`   Public IP: ${result.publicIp}`);
+    console.log(`   Instance ID: ${deployment.instance_id}`);
+    console.log(`   Public IP: ${deployment.public_ip}`);
 
     // Update last accessed time for credentials
     await awsCredential.update({ last_accessed_at: new Date() });
@@ -112,11 +263,15 @@ async function processDeployment(deploymentId) {
     return {
       success: true,
       deploymentId,
-      result,
     };
   } catch (error) {
     console.error(`❌ [WORKER] Deployment failed: ${deploymentId}`, error);
     await addLog(deploymentId, 'error', `Deployment failed: ${error.message}`);
+
+    // Clean up SSH connection
+    if (sshService) {
+      sshService.disconnectAll();
+    }
 
     // Update deployment status to failed
     const deployment = await Deployment.findByPk(deploymentId);
@@ -187,11 +342,26 @@ async function processTermination(deploymentId) {
 
     const awsCredentials = JSON.parse(decryptedData);
 
-    // Terminate EC2 instance
-    await terminateDeployment(awsCredentials, {
-      region: deployment.region,
-      instanceId: deployment.instance_id,
-    });
+    // Check if deployment has SSH keypair to clean up
+    const config = deployment.configuration || {};
+    const ssh = config.ssh || {};
+    const keyPairName = ssh.keyPairName;
+
+    if (keyPairName) {
+      // Use enhanced termination to clean up keypair
+      console.log(`🔑 [WORKER] Cleaning up SSH keypair: ${keyPairName}`);
+      await terminateDeploymentComplete(awsCredentials, {
+        region: deployment.region,
+        instanceId: deployment.instance_id,
+        keyPairName: keyPairName,
+      });
+    } else {
+      // Use basic termination
+      await terminateDeployment(awsCredentials, {
+        region: deployment.region,
+        instanceId: deployment.instance_id,
+      });
+    }
 
     // Update deployment status
     await deployment.update({
