@@ -25,7 +25,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 /**
  * Generate JWT token
  */
-function generateToken(payload) {
+function generateToken(payload, expiresIn = JWT_EXPIRES_IN) {
   const tokenPayload = {
     userId: payload.id || payload.userId,
     email: payload.email,
@@ -35,8 +35,13 @@ function generateToken(payload) {
     iat: Math.floor(Date.now() / 1000)
   };
 
+  // Include temp2FA flag if present (for 2FA login flow)
+  if (payload.temp2FA) {
+    tokenPayload.temp2FA = true;
+  }
+
   return jwt.sign(tokenPayload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: expiresIn,
     issuer: 'focal-deploy-saas',
     audience: 'focal-deploy-cli'
   });
