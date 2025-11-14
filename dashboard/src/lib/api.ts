@@ -110,6 +110,23 @@ export const userAPI = {
   deleteAccount: () => api.delete('/api/user/account'),
 };
 
+export const twoFactorAPI = {
+  // Get 2FA status
+  status: () => api.get('/api/auth/2fa/status'),
+
+  // Setup 2FA (returns QR code and backup codes)
+  setup: () => api.post('/api/auth/2fa/setup'),
+
+  // Verify TOTP code to enable 2FA
+  verify: (token: string) => api.post('/api/auth/2fa/verify', { token }),
+
+  // Disable 2FA
+  disable: (password: string) => api.post('/api/auth/2fa/disable', { password }),
+
+  // Regenerate backup codes
+  regenerateBackupCodes: () => api.post('/api/auth/2fa/regenerate-backup-codes'),
+};
+
 export const deploymentsAPI = {
   list: (params?: { status?: string; limit?: number; offset?: number }) =>
     api.get('/api/deployments', { params }),
