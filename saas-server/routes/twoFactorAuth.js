@@ -288,7 +288,7 @@ router.post(
       }
 
       // Get user
-      const user = await User.findByPk(decoded.id);
+      const user = await User.findByPk(decoded.userId);
       if (!user) {
         return res.status(404).json({
           error: 'Not Found',
