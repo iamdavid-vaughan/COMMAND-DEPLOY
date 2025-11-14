@@ -37,6 +37,8 @@ const usageRoutes = require('./routes/usage');
 const billingRoutes = require('./routes/billing');
 const pricingRoutes = require('./routes/pricing');
 const healthRoutes = require('./routes/health');
+const auditRoutes = require('./routes/audit');
+const passwordSecurityRoutes = require('./routes/password-security');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error-handler');
@@ -156,6 +158,8 @@ app.use('/api/deployments', authenticate, deploymentRoutes);
 app.use('/api/credentials', authenticate, credentialsRoutes);
 app.use('/api/usage', authenticate, usageRoutes);
 app.use('/api/billing', authenticate, billingRoutes);
+app.use('/api/audit', authenticate, auditRoutes);
+app.use('/api/password-security', authenticate, passwordSecurityRoutes);
 
 /**
  * Root Route
