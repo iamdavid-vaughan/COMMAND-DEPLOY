@@ -25,12 +25,43 @@ class DeploymentBridge {
    * @param {string} deploymentId - SaaS deployment ID
    * @param {object} saasConfig - Configuration from SaaS form
    * @param {string} userId - User ID from SaaS database
+   * @param {Function} logCallback - Optional callback for streaming logs
    * @returns {Promise<object>} Deployment results
    */
-  async executeDeployment(deploymentId, saasConfig, userId) {
+  async executeDeployment(deploymentId, saasConfig, userId, logCallback = null) {
     console.log(`[DeploymentBridge] Starting deployment ${deploymentId} for user ${userId}`);
 
+    // Store original console methods
+    const originalLog = console.log;
+    const originalInfo = console.info;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    // Override console methods to capture output
+    const captureOutput = (level, ...args) => {
+      const message = args.map(arg =>
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+
+      // Call original console method
+      if (level === 'error') originalError(message);
+      else if (level === 'warn') originalWarn(message);
+      else if (level === 'info') originalInfo(message);
+      else originalLog(message);
+
+      // Stream to SaaS logs if callback provided
+      if (logCallback && message.trim()) {
+        logCallback(level, message);
+      }
+    };
+
     try {
+      // Intercept console output
+      console.log = (...args) => captureOutput('info', ...args);
+      console.info = (...args) => captureOutput('info', ...args);
+      console.warn = (...args) => captureOutput('warning', ...args);
+      console.error = (...args) => captureOutput('error', ...args);
+
       // 1. Get user's stored credentials from database
       const credentials = await this.getStoredCredentials(userId);
       console.log('[DeploymentBridge] Retrieved credentials from database');
@@ -45,17 +76,32 @@ class DeploymentBridge {
 
       // 4. Call the ACTUAL deployment executor (the one the CLI uses)
       console.log('[DeploymentBridge] Calling CLI deployment executor...');
+      console.log('');
+      console.log('🚀 Starting focal-deploy deployment process...');
+      console.log('');
+
       const executor = new DeploymentExecutor();
       const result = await executor.execute(projectPath, stepData);
 
+      console.log('');
       console.log('[DeploymentBridge] Deployment completed successfully');
+
       return {
         ...result,
         projectPath
       };
     } catch (error) {
       console.error('[DeploymentBridge] Deployment failed:', error.message);
+      if (error.stack) {
+        console.error(error.stack);
+      }
       throw error;
+    } finally {
+      // Restore original console methods
+      console.log = originalLog;
+      console.info = originalInfo;
+      console.warn = originalWarn;
+      console.error = originalError;
     }
   }
 

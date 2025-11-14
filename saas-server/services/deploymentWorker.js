@@ -71,10 +71,17 @@ async function processDeployment(deploymentId) {
     // 2. Building CLI-compatible stepData
     // 3. Calling the actual deployment executor (focal-deploy up + all phases)
     // 4. Creating EC2 + S3 + Security Groups + SSH hardening + DNS + SSL + Application
+
+    // Stream CLI output to deployment logs in real-time
+    const logCallback = async (level, message) => {
+      await addLog(deploymentId, level, message);
+    };
+
     const result = await bridge.executeDeployment(
       deploymentId,
       deployment.configuration,
-      deployment.user_id
+      deployment.user_id,
+      logCallback  // Stream all CLI output to deployment logs
     );
 
     projectPath = result.projectPath;
