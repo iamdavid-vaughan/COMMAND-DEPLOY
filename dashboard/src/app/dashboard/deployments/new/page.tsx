@@ -38,9 +38,8 @@ const INSTANCE_TYPES = [
 ];
 
 const OS_OPTIONS = [
-  { value: 'ubuntu-22.04', label: 'Ubuntu 22.04 LTS', recommended: true },
-  { value: 'ubuntu-20.04', label: 'Ubuntu 20.04 LTS' },
-  { value: 'amazon-linux-2', label: 'Amazon Linux 2' },
+  { value: 'ubuntu', label: 'Ubuntu 22.04 LTS', recommended: true },
+  { value: 'debian', label: 'Debian 12 (Bookworm)' },
 ];
 
 const APP_TYPES = [
@@ -64,16 +63,18 @@ export default function NewDeploymentWizardPage() {
     instanceType: 't3.micro',
 
     // Step 2: Server
-    operatingSystem: 'ubuntu-22.04',
-    deploymentUsername: 'deploy', // Changed from serverUsername - custom deployment user
-    sshPort: 2847, // CRITICAL: Changed from 22 - port 22 gets closed during deployment!
+    operatingSystem: 'ubuntu',
+    deploymentUsername: 'deploy',
+    sshPort: 2847,
+    storageRootSize: 20, // GB
+    storageDataSize: 10, // GB
 
     // Step 3: Security
     enableSshHardening: true,
     enableFail2ban: true,
     enableAutoUpdates: true,
     enableFirewall: true,
-    allowedPorts: [2847, 80, 443], // Use custom SSH port, not 22!
+    allowedPorts: [2847, 80, 443],
 
     // Step 4: Application
     applicationType: 'nodejs',
@@ -83,9 +84,12 @@ export default function NewDeploymentWizardPage() {
     envVars: [] as { key: string; value: string }[],
 
     // Step 5: Domain & SSL
-    customDomain: '',
+    domains: [] as string[],
+    primaryDomain: '',
     enableSsl: false,
     sslEmail: '',
+    sslChallengeType: 'dns-01' as 'dns-01' | 'http-01',
+    sslUseStaging: false,
   });
 
   const handleNext = () => {
@@ -109,33 +113,27 @@ export default function NewDeploymentWizardPage() {
         projectName: formData.projectName,
         region: formData.region,
         instanceType: formData.instanceType,
-        configuration: {
-          server: {
-            os: formData.operatingSystem,
-            deploymentUsername: formData.deploymentUsername,
-            sshPort: formData.sshPort,
-          },
-          security: {
-            sshHardening: formData.enableSshHardening,
-            fail2ban: formData.enableFail2ban,
-            autoUpdates: formData.enableAutoUpdates,
-            firewall: formData.enableFirewall,
-            allowedPorts: formData.allowedPorts,
-            customSSHPort: formData.sshPort, // Explicitly add custom SSH port
-          },
-          application: {
-            type: formData.applicationType,
-            githubRepo: formData.githubRepo,
-            githubBranch: formData.githubBranch,
-            port: formData.applicationPort,
-            envVars: formData.envVars,
-          },
-          domain: formData.customDomain ? {
-            name: formData.customDomain,
-            ssl: formData.enableSsl,
-            sslEmail: formData.sslEmail,
-          } : null,
-        },
+        operatingSystem: formData.operatingSystem,
+        deploymentUsername: formData.deploymentUsername,
+        sshPort: formData.sshPort,
+        storageRootSize: formData.storageRootSize,
+        storageDataSize: formData.storageDataSize,
+        allowedPorts: formData.allowedPorts,
+        enableSshHardening: formData.enableSshHardening,
+        enableFail2ban: formData.enableFail2ban,
+        enableAutoUpdates: formData.enableAutoUpdates,
+        enableFirewall: formData.enableFirewall,
+        applicationType: formData.applicationType,
+        githubRepo: formData.githubRepo,
+        githubBranch: formData.githubBranch,
+        applicationPort: formData.applicationPort,
+        envVars: formData.envVars,
+        domains: formData.domains,
+        primaryDomain: formData.primaryDomain,
+        enableSsl: formData.enableSsl,
+        sslEmail: formData.sslEmail,
+        sslChallengeType: formData.sslChallengeType,
+        sslUseStaging: formData.sslUseStaging,
       };
 
       await deploymentsAPI.create(payload);
@@ -407,6 +405,37 @@ export default function NewDeploymentWizardPage() {
                 </p>
               )}
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Storage Configuration</label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Root Volume (GB)</label>
+                  <input
+                    type="number"
+                    value={formData.storageRootSize}
+                    onChange={(e) => setFormData({ ...formData, storageRootSize: parseInt(e.target.value) })}
+                    min="8"
+                    max="1000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Data Volume (GB)</label>
+                  <input
+                    type="number"
+                    value={formData.storageDataSize}
+                    onChange={(e) => setFormData({ ...formData, storageDataSize: parseInt(e.target.value) })}
+                    min="10"
+                    max="1000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Root volume for OS and applications, data volume for application data. S3 bucket will be created automatically.
+              </p>
+            </div>
           </div>
         )}
 
@@ -599,21 +628,73 @@ export default function NewDeploymentWizardPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Domain (Optional)
+                Primary Domain (Optional)
               </label>
               <input
                 type="text"
-                value={formData.customDomain}
-                onChange={(e) => setFormData({ ...formData, customDomain: e.target.value })}
+                value={formData.primaryDomain}
+                onChange={(e) => {
+                  const domain = e.target.value;
+                  setFormData({
+                    ...formData,
+                    primaryDomain: domain,
+                    domains: domain ? [domain, ...formData.domains.filter(d => d !== domain)] : formData.domains
+                  });
+                }}
                 placeholder="example.com"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="mt-1 text-sm text-gray-500">
-                If provided, we'll configure Nginx for this domain
+                Main domain for your application. Nginx will be configured for this domain.
               </p>
             </div>
 
-            {formData.customDomain && (
+            {formData.primaryDomain && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Additional Domains (Optional)
+                </label>
+                <div className="space-y-2">
+                  {formData.domains.filter(d => d !== formData.primaryDomain).map((domain, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={domain}
+                        readOnly
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          domains: formData.domains.filter((_, i) => formData.domains.indexOf(domain) !== i)
+                        })}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newDomain = prompt('Enter additional domain (e.g., www.example.com):');
+                      if (newDomain && !formData.domains.includes(newDomain)) {
+                        setFormData({ ...formData, domains: [...formData.domains, newDomain] });
+                      }
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    + Add Additional Domain
+                  </button>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  Add subdomains or alternate domains (e.g., www.example.com, api.example.com)
+                </p>
+              </div>
+            )}
+
+            {formData.primaryDomain && (
               <>
                 <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
                   <input
@@ -631,26 +712,80 @@ export default function NewDeploymentWizardPage() {
                 </label>
 
                 {formData.enableSsl && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email for SSL Certificate
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email for SSL Certificate <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.sslEmail}
+                        onChange={(e) => setFormData({ ...formData, sslEmail: e.target.value })}
+                        placeholder="admin@example.com"
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        Required by Let's Encrypt for certificate expiration notifications
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Challenge Type
+                      </label>
+                      <div className="space-y-2">
+                        <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                          <input
+                            type="radio"
+                            name="challengeType"
+                            value="dns-01"
+                            checked={formData.sslChallengeType === 'dns-01'}
+                            onChange={(e) => setFormData({ ...formData, sslChallengeType: 'dns-01' })}
+                            className="mr-3"
+                          />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">DNS-01 Challenge</div>
+                            <div className="text-xs text-gray-500">Requires DNS API access. Supports wildcards.</div>
+                          </div>
+                        </label>
+                        <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                          <input
+                            type="radio"
+                            name="challengeType"
+                            value="http-01"
+                            checked={formData.sslChallengeType === 'http-01'}
+                            onChange={(e) => setFormData({ ...formData, sslChallengeType: 'http-01' })}
+                            className="mr-3"
+                          />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">HTTP-01 Challenge</div>
+                            <div className="text-xs text-gray-500">Simpler, but requires port 80 accessible.</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={formData.sslUseStaging}
+                        onChange={(e) => setFormData({ ...formData, sslUseStaging: e.target.checked })}
+                        className="mr-3 h-5 w-5"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">Use Staging Mode</div>
+                        <div className="text-xs text-gray-500">
+                          Test SSL setup with Let's Encrypt staging servers (recommended for first deployment)
+                        </div>
+                      </div>
                     </label>
-                    <input
-                      type="email"
-                      value={formData.sslEmail}
-                      onChange={(e) => setFormData({ ...formData, sslEmail: e.target.value })}
-                      placeholder="admin@example.com"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Required by Let's Encrypt for certificate notifications
-                    </p>
                   </div>
                 )}
               </>
             )}
 
-            {!formData.customDomain && (
+            {!formData.primaryDomain && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <p className="text-sm text-gray-600">
                   No custom domain configured. Your application will be accessible via the EC2 instance's
@@ -698,6 +833,10 @@ export default function NewDeploymentWizardPage() {
                   <div className="flex justify-between">
                     <dt className="text-gray-600">Custom SSH Port:</dt>
                     <dd className="text-gray-900 font-mono">{formData.sshPort}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-gray-600">Storage:</dt>
+                    <dd className="text-gray-900">{formData.storageRootSize}GB root / {formData.storageDataSize}GB data</dd>
                   </div>
                 </dl>
               </div>
@@ -748,18 +887,36 @@ export default function NewDeploymentWizardPage() {
                 </div>
               )}
 
-              {formData.customDomain && (
+              {formData.primaryDomain && (
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="font-medium text-gray-900 mb-2">Domain & SSL</h3>
                   <dl className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <dt className="text-gray-600">Domain:</dt>
-                      <dd className="text-gray-900">{formData.customDomain}</dd>
+                      <dt className="text-gray-600">Primary Domain:</dt>
+                      <dd className="text-gray-900">{formData.primaryDomain}</dd>
                     </div>
+                    {formData.domains.length > 1 && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-600">Additional Domains:</dt>
+                        <dd className="text-gray-900">{formData.domains.filter(d => d !== formData.primaryDomain).join(', ')}</dd>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <dt className="text-gray-600">SSL:</dt>
-                      <dd className="text-gray-900">{formData.enableSsl ? 'Enabled' : 'Disabled'}</dd>
+                      <dd className="text-gray-900">{formData.enableSsl ? 'Enabled (Let\'s Encrypt)' : 'Disabled'}</dd>
                     </div>
+                    {formData.enableSsl && (
+                      <>
+                        <div className="flex justify-between">
+                          <dt className="text-gray-600">SSL Challenge:</dt>
+                          <dd className="text-gray-900">{formData.sslChallengeType.toUpperCase()}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-gray-600">SSL Mode:</dt>
+                          <dd className="text-gray-900">{formData.sslUseStaging ? 'Staging (Test)' : 'Production'}</dd>
+                        </div>
+                      </>
+                    )}
                   </dl>
                 </div>
               )}
