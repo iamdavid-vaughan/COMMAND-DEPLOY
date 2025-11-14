@@ -149,8 +149,8 @@ app.use((req, res, next) => {
  * API Routes
  */
 app.use('/api/health', healthRoutes);
+app.use('/api/auth/2fa', twoFactorAuthRoutes); // 2FA routes (must come before /api/auth)
 app.use('/api/auth', authRoutes);
-app.use('/api/auth/2fa', twoFactorAuthRoutes); // 2FA routes (some require auth, some don't)
 app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/user', authenticate, userRoutes);
 app.use('/api/admin', authenticate, adminRoutes);
