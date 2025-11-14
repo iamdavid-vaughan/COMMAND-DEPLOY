@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
 const { getModels } = require('../models');
+const { decrypt } = require('./encryption');
 const DeploymentExecutor = require('../../lib/wizard/deployment-executor');
 
 class DeploymentBridge {
@@ -64,31 +65,80 @@ class DeploymentBridge {
    * @returns {Promise<object>} Credentials object
    */
   async getStoredCredentials(userId) {
-    const { Credential } = getModels();
+    const { EncryptedCredential } = getModels();
 
     // Get AWS credentials
-    const awsCred = await Credential.findOne({
-      where: { userId, type: 'aws' }
+    const awsCred = await EncryptedCredential.findOne({
+      where: {
+        user_id: userId,
+        credential_type: 'aws'
+      }
     });
 
     if (!awsCred) {
       throw new Error('AWS credentials not found. Please add AWS credentials in the Credentials section before deploying.');
     }
 
+    // Decrypt AWS credentials
+    const awsDecrypted = decrypt(
+      {
+        encrypted: awsCred.encrypted_data,
+        iv: awsCred.iv,
+        authTag: awsCred.auth_tag,
+        salt: awsCred.salt,
+      },
+      userId
+    );
+    const awsCredentials = JSON.parse(awsDecrypted);
+
     // Get GitHub credentials (optional)
-    const githubCred = await Credential.findOne({
-      where: { userId, type: 'github' }
+    const githubCred = await EncryptedCredential.findOne({
+      where: {
+        user_id: userId,
+        credential_type: 'github'
+      }
     });
+
+    let githubCredentials = null;
+    if (githubCred) {
+      const githubDecrypted = decrypt(
+        {
+          encrypted: githubCred.encrypted_data,
+          iv: githubCred.iv,
+          authTag: githubCred.auth_tag,
+          salt: githubCred.salt,
+        },
+        userId
+      );
+      githubCredentials = JSON.parse(githubDecrypted);
+    }
 
     // Get DNS credentials (optional)
-    const dnsCred = await Credential.findOne({
-      where: { userId, type: 'dns' }
+    const dnsCred = await EncryptedCredential.findOne({
+      where: {
+        user_id: userId,
+        credential_type: 'dns'
+      }
     });
 
+    let dnsCredentials = null;
+    if (dnsCred) {
+      const dnsDecrypted = decrypt(
+        {
+          encrypted: dnsCred.encrypted_data,
+          iv: dnsCred.iv,
+          authTag: dnsCred.auth_tag,
+          salt: dnsCred.salt,
+        },
+        userId
+      );
+      dnsCredentials = JSON.parse(dnsDecrypted);
+    }
+
     return {
-      aws: JSON.parse(awsCred.data),
-      github: githubCred ? JSON.parse(githubCred.data) : null,
-      dns: dnsCred ? JSON.parse(dnsCred.data) : null
+      aws: awsCredentials,
+      github: githubCredentials,
+      dns: dnsCredentials
     };
   }
 
