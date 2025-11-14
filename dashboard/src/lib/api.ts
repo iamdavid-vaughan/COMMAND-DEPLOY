@@ -120,6 +120,10 @@ export const twoFactorAPI = {
   // Verify TOTP code to enable 2FA
   verify: (token: string) => api.post('/api/auth/2fa/verify', { token }),
 
+  // Verify 2FA code during login
+  verifyLogin: (token: string, tempToken: string) =>
+    api.post('/api/auth/2fa/verify-login', { token, tempToken }),
+
   // Disable 2FA
   disable: (password: string) => api.post('/api/auth/2fa/disable', { password }),
 

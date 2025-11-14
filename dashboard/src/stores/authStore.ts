@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import { authAPI } from '@/lib/api';
+import { authAPI, twoFactorAPI } from '@/lib/api';
 
 interface User {
   id: string;
@@ -14,6 +14,14 @@ interface User {
   superAdminFor?: string[];
 }
 
+interface LoginResponse {
+  requires2FA?: boolean;
+  tempToken?: string;
+  user?: User;
+  token?: string;
+  message?: string;
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -22,7 +30,8 @@ interface AuthState {
   error: string | null;
 
   // Actions
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
+  verifyTwoFactorLogin: (token: string, tempToken: string) => Promise<void>;
   register: (email: string, password: string, name: string, company?: string) => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
@@ -43,6 +52,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const response = await authAPI.login(email, password);
       console.log('🔐 [AUTH] Login response received:', response.data);
+
+      // Check if 2FA is required
+      if (response.data.requires2FA) {
+        console.log('🔐 [AUTH] 2FA required - returning temp token');
+        set({ isLoading: false });
+        return {
+          requires2FA: true,
+          tempToken: response.data.tempToken,
+          message: response.data.message,
+        };
+      }
+
+      // Normal login (no 2FA)
       const { user, token } = response.data;
 
       console.log('🔐 [AUTH] Token from response:', token ? `${token.substring(0, 20)}... (${token.length} chars)` : 'NO TOKEN');
@@ -60,9 +82,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ user, token, isLoading: false });
       console.log('🔐 [AUTH] Login completed successfully');
+
+      return {
+        user,
+        token,
+        message: response.data.message,
+      };
     } catch (error: any) {
       console.error('🔐 [AUTH] Login failed:', error);
       const errorMessage = error.response?.data?.message || 'Login failed';
+      set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
+  verifyTwoFactorLogin: async (token: string, tempToken: string) => {
+    console.log('🔐 [AUTH] Verifying 2FA code');
+    set({ isLoading: true, error: null });
+    try {
+      const response = await twoFactorAPI.verifyLogin(token, tempToken);
+      console.log('🔐 [AUTH] 2FA verification response:', response.data);
+
+      const { user, token: authToken } = response.data;
+
+      console.log('🔐 [AUTH] Token from 2FA verification:', authToken ? `${authToken.substring(0, 20)}... (${authToken.length} chars)` : 'NO TOKEN');
+      console.log('🔐 [AUTH] User from 2FA verification:', user);
+
+      // Store token and user
+      localStorage.setItem('focal_auth_token', authToken);
+      localStorage.setItem('focal_user', JSON.stringify(user));
+
+      set({ user, token: authToken, isLoading: false });
+      console.log('🔐 [AUTH] 2FA verification completed successfully');
+    } catch (error: any) {
+      console.error('🔐 [AUTH] 2FA verification failed:', error);
+      const errorMessage = error.response?.data?.message || '2FA verification failed';
       set({ error: errorMessage, isLoading: false });
       throw error;
     }
