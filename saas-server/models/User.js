@@ -83,6 +83,20 @@ module.exports = (sequelize) => {
     password_reset_expires: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    twofa_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    twofa_secret: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    twofa_backup_codes: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: []
     }
   }, {
     tableName: 'users',

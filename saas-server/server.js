@@ -28,6 +28,7 @@ const chalk = require('chalk');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const twoFactorAuthRoutes = require('./routes/twoFactorAuth');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const deploymentRoutes = require('./routes/deployments');
@@ -147,6 +148,7 @@ app.use((req, res, next) => {
  */
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/auth/2fa', twoFactorAuthRoutes); // 2FA routes (some require auth, some don't)
 app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/user', authenticate, userRoutes);
 app.use('/api/admin', authenticate, adminRoutes);

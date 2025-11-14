@@ -153,6 +153,25 @@ router.post('/login',
         });
       }
 
+      // Check if 2FA is enabled
+      if (user.twofa_enabled) {
+        // Generate temporary token for 2FA verification (short-lived, 5 minutes)
+        const tempToken = generateToken(
+          {
+            id: user.id,
+            email: user.email,
+            temp2FA: true, // Mark as temporary 2FA token
+          },
+          '5m' // 5 minute expiration
+        );
+
+        return res.json({
+          requires2FA: true,
+          tempToken,
+          message: 'Please enter your 2FA code',
+        });
+      }
+
       // Update last login time
       await user.update({ last_login_at: new Date() });
 
