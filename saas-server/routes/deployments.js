@@ -94,13 +94,25 @@ router.post('/',
       const { Deployment, UsageTracking } = getModels();
       const userId = req.user.userId;
 
+      // Extract all fields from request body
+      // Store most of them in the configuration JSONB field for the bridge to use
       const {
         projectName,
         region,
         instanceType,
-        domains = [],
-        configuration = {}
+        domains,
+        // All other fields go into configuration for the deployment bridge
+        ...configurationFields
       } = req.body;
+
+      // Build configuration object that the deployment bridge expects
+      const configuration = {
+        projectName,  // Bridge needs this
+        region: region || 'us-east-1',
+        instanceType: instanceType || 't3.micro',
+        domains: domains || [],
+        ...configurationFields  // Everything else: OS, username, SSH port, SSL, etc.
+      };
 
       // Create deployment record
       const deployment = await Deployment.create({
@@ -109,8 +121,8 @@ router.post('/',
         status: 'pending',
         region: region || 'us-east-1',
         instance_type: instanceType || 't3.micro',
-        domains: domains,
-        configuration: configuration,
+        domains: domains || [],
+        configuration: configuration,  // ← Store EVERYTHING here
         started_at: new Date()
       });
 
