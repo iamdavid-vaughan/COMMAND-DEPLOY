@@ -63,6 +63,11 @@ module.exports = (sequelize) => {
     completed_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    cancelled_by_user: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false
     }
   }, {
     tableName: 'deployments',

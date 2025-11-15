@@ -285,6 +285,69 @@ router.patch('/:id',
 );
 
 /**
+ * PATCH /api/deployments/:id/cancel - Cancel running deployment
+ */
+router.patch('/:id/cancel',
+  [
+    param('id').isUUID().withMessage('Invalid deployment ID')
+  ],
+  async (req, res, next) => {
+    try {
+      // Validate input
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { Deployment } = getModels();
+      const userId = req.user.userId;
+      const deploymentId = req.params.id;
+
+      // Fetch deployment
+      const deployment = await Deployment.findOne({
+        where: {
+          id: deploymentId,
+          user_id: userId
+        }
+      });
+
+      if (!deployment) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Deployment not found'
+        });
+      }
+
+      // Can only cancel running or pending deployments
+      if (!['pending', 'running'].includes(deployment.status)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: `Cannot cancel deployment with status: ${deployment.status}`
+        });
+      }
+
+      // Set cancellation flag
+      await deployment.update({
+        cancelled_by_user: true
+      });
+
+      res.json({
+        success: true,
+        message: 'Deployment cancellation requested. The deployment will stop shortly.',
+        deployment: {
+          id: deployment.id,
+          status: deployment.status,
+          cancelledByUser: true
+        }
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * DELETE /api/deployments/:id - Delete deployment
  */
 router.delete('/:id',
@@ -318,14 +381,38 @@ router.delete('/:id',
         });
       }
 
-      // TODO: Trigger actual termination of AWS resources
-      // This would call AWS SDK to terminate the EC2 instance
+      // Cannot delete running/pending deployments - must cancel first
+      if (['running', 'pending'].includes(deployment.status)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Cannot delete a running deployment. Please cancel it first using PATCH /deployments/:id/cancel'
+        });
+      }
 
-      // Mark deployment as deleted (soft delete)
-      await deployment.update({
-        status: 'terminated',
-        completed_at: new Date()
+      // If deployment is completed and has AWS resources, terminate them
+      if (deployment.status === 'completed' && deployment.instance_id) {
+        const { processTermination } = require('../services/deploymentWorker');
+
+        // Trigger background termination of AWS resources (EC2, S3, security groups, etc.)
+        console.log(`[API] Triggering AWS resource termination for deployment ${deploymentId}`);
+        processTermination(deploymentId).catch(error => {
+          console.error(`[API] AWS termination failed for ${deploymentId}:`, error.message);
+          // Continue with database deletion even if AWS termination fails
+        });
+
+        // Mark as terminated (processTermination will update this too)
+        await deployment.update({
+          status: 'terminated',
+          completed_at: new Date()
+        });
+      }
+
+      // Delete the deployment record from database
+      const { DeploymentLog } = getModels();
+      await DeploymentLog.destroy({
+        where: { deployment_id: deploymentId }
       });
+      await deployment.destroy();
 
       // Track usage
       const currentMonth = new Date().toISOString().slice(0, 7);
@@ -335,15 +422,18 @@ router.delete('/:id',
         action: 'delete',
         quantity: 1,
         metadata: {
-          deployment_id: deployment.id,
-          project_name: deployment.project_name
+          deployment_id: deploymentId,
+          project_name: deployment.project_name,
+          had_instance: !!deployment.instance_id
         },
         billing_period: currentMonth
       });
 
       res.json({
         success: true,
-        message: 'Deployment terminated'
+        message: deployment.instance_id
+          ? 'Deployment deletion initiated. AWS resources are being terminated in the background.'
+          : 'Deployment deleted successfully'
       });
 
     } catch (error) {

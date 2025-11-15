@@ -53,6 +53,18 @@ async function processDeployment(deploymentId) {
       return;
     }
 
+    // Check if deployment was cancelled before we even started
+    if (deployment.cancelled_by_user) {
+      console.log(`🚫 [WORKER] Deployment ${deploymentId} was cancelled by user before starting`);
+      await deployment.update({
+        status: 'cancelled',
+        completed_at: new Date(),
+        error_message: 'Deployment cancelled by user'
+      });
+      await addLog(deploymentId, 'warning', 'Deployment cancelled by user');
+      return;
+    }
+
     console.log(`🚀 [WORKER] Processing deployment: ${deploymentId} (${deployment.project_name})`);
     await addLog(deploymentId, 'info', `Starting deployment for project: ${deployment.project_name}`);
 
@@ -73,8 +85,21 @@ async function processDeployment(deploymentId) {
     // 4. Creating EC2 + S3 + Security Groups + SSH hardening + DNS + SSL + Application
 
     // Stream CLI output to deployment logs in real-time
+    // Also check for cancellation every 10 log messages
+    let logCount = 0;
     const logCallback = async (level, message) => {
       await addLog(deploymentId, level, message);
+
+      // Check for cancellation every 10 log messages to avoid excessive DB queries
+      logCount++;
+      if (logCount % 10 === 0) {
+        const currentDeployment = await Deployment.findByPk(deploymentId);
+        if (currentDeployment && currentDeployment.cancelled_by_user) {
+          console.log(`🚫 [WORKER] Deployment ${deploymentId} cancelled by user during execution`);
+          await addLog(deploymentId, 'warning', 'Deployment cancelled by user');
+          throw new Error('Deployment cancelled by user');
+        }
+      }
     };
 
     const result = await bridge.executeDeployment(
@@ -144,19 +169,26 @@ async function processDeployment(deploymentId) {
       deploymentId,
     };
   } catch (error) {
-    console.error(`❌ [WORKER] Deployment failed: ${deploymentId}`, error);
-    await addLog(deploymentId, 'error', `Deployment failed: ${error.message}`);
+    const isCancelled = error.message.includes('cancelled by user');
+
+    if (isCancelled) {
+      console.log(`🚫 [WORKER] Deployment cancelled: ${deploymentId}`);
+      await addLog(deploymentId, 'warning', 'Deployment cancelled by user');
+    } else {
+      console.error(`❌ [WORKER] Deployment failed: ${deploymentId}`, error);
+      await addLog(deploymentId, 'error', `Deployment failed: ${error.message}`);
+    }
 
     // Clean up temporary project directory
     if (projectPath) {
       await bridge.cleanupProjectDirectory(projectPath);
     }
 
-    // Update deployment status to failed
+    // Update deployment status
     const deployment = await Deployment.findByPk(deploymentId);
     if (deployment) {
       await deployment.update({
-        status: 'failed',
+        status: isCancelled ? 'cancelled' : 'failed',
         error_message: error.message,
         completed_at: new Date(),
       });
@@ -166,6 +198,7 @@ async function processDeployment(deploymentId) {
       success: false,
       deploymentId,
       error: error.message,
+      cancelled: isCancelled
     };
   }
 }
