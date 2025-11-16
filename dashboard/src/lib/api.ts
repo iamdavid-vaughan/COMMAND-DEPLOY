@@ -303,6 +303,20 @@ export const adminAPI = {
     subject: string;
     message: string;
   }) => api.post('/api/admin/send-email', data),
+
+  // Platform settings
+  getSettings: () => api.get('/api/admin/settings'),
+
+  updateAuthorizenet: (data: {
+    apiLoginId: string;
+    transactionKey: string;
+    environment: 'sandbox' | 'production';
+  }) => api.put('/api/admin/settings/authorizenet', data),
+
+  updatePostmark: (data: {
+    serverToken: string;
+    fromEmail?: string;
+  }) => api.put('/api/admin/settings/postmark', data),
 };
 
 export const auditAPI = {

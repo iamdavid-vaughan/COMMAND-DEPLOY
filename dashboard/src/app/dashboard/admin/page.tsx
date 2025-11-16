@@ -18,6 +18,7 @@ import {
   DollarSign,
   Activity,
   UserCheck,
+  Settings,
 } from 'lucide-react';
 
 interface User {
@@ -209,7 +210,7 @@ export default function AdminPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <a
             href="/dashboard/admin/security"
             className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-sm p-6 text-white hover:from-blue-700 hover:to-blue-800 transition-all transform hover:scale-105"
@@ -222,6 +223,20 @@ export default function AdminPage() {
             </div>
             <p className="text-blue-100 text-sm">
               View audit logs, track sensitive actions, and monitor security events
+            </p>
+          </a>
+          <a
+            href="/dashboard/admin/settings"
+            className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg shadow-sm p-6 text-white hover:from-purple-700 hover:to-purple-800 transition-all transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                <Settings className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold">Platform Settings</h3>
+            </div>
+            <p className="text-purple-100 text-sm">
+              Configure Authorize.Net, Postmark, and other platform integrations
             </p>
           </a>
         </div>
