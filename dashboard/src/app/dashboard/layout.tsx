@@ -64,6 +64,7 @@ export default function DashboardLayout({
     { name: 'Password Security', href: '/dashboard/security', icon: Shield },
     { name: 'Usage', href: '/dashboard/usage', icon: BarChart3 },
     { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
+    { name: 'API Keys', href: '/dashboard/api-keys', icon: Key },
     { name: 'API Docs', href: '/dashboard/api-docs', icon: FileText },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];

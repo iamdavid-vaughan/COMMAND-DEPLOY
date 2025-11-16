@@ -253,6 +253,21 @@ export const pricingAPI = {
   get: (tier: string) => api.get(`/api/pricing/${tier}`),
 };
 
+export const apiKeysAPI = {
+  list: () => api.get('/api/api-keys'),
+
+  create: (data: {
+    name: string;
+    permissions?: string[];
+    expiresInDays?: number;
+  }) => api.post('/api/api-keys', data),
+
+  update: (id: string, data: { name: string }) =>
+    api.patch(`/api/api-keys/${id}`, data),
+
+  revoke: (id: string) => api.delete(`/api/api-keys/${id}`),
+};
+
 export const adminAPI = {
   // User management
   users: (params?: {

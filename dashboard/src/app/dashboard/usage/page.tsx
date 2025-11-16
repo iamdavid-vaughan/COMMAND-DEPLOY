@@ -45,9 +45,17 @@ interface UsageStats {
   limits: UsageLimits;
 }
 
+interface HistoricalDataPoint {
+  month: string;
+  deployments: number;
+  apiCalls: number;
+  storageGB: number;
+}
+
 export default function UsagePage() {
   const { user } = useAuthStore();
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -61,9 +69,10 @@ export default function UsagePage() {
       setLoading(true);
       setError(null);
 
-      const [currentUsage, limitsData] = await Promise.all([
+      const [currentUsage, limitsData, historyData] = await Promise.all([
         usageAPI.current('month'),
         usageAPI.limits(),
+        usageAPI.history(6), // Last 6 months
       ]);
 
       setUsageStats({
@@ -73,6 +82,8 @@ export default function UsagePage() {
         storageUsed: currentUsage.data.storageUsedGB || 0,
         limits: limitsData.data.limits,
       });
+
+      setHistoricalData(historyData.data.history || []);
 
       setLoading(false);
     } catch (err: any) {
@@ -368,6 +379,111 @@ export default function UsagePage() {
             >
               Upgrade Plan →
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* Charts Section */}
+      {historicalData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Deployments Over Time */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
+              Deployments Over Time
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={historicalData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="deployments"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  name="Deployments"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Resource Usage Breakdown */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Activity className="h-5 w-5 mr-2 text-blue-600" />
+              Current Resource Distribution
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Active Deployments', value: usageStats.currentlyActive },
+                    { name: 'Total Instances', value: usageStats.totalInstances },
+                    { name: 'Storage (GB)', value: Math.round(usageStats.storageUsed) },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  <Cell fill="#3b82f6" />
+                  <Cell fill="#10b981" />
+                  <Cell fill="#f59e0b" />
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* API Calls Over Time */}
+          {usageStats.limits.apiAccess && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <BarChart3 className="h-5 w-5 mr-2 text-blue-600" />
+                API Calls Over Time
+              </h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={historicalData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="apiCalls" fill="#8b5cf6" name="API Calls" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Storage Usage Over Time */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Activity className="h-5 w-5 mr-2 text-blue-600" />
+              Storage Usage Trend
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={historicalData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="storageGB"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  name="Storage (GB)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
