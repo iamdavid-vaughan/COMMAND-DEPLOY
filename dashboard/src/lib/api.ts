@@ -296,6 +296,13 @@ export const adminAPI = {
 
   // Platform statistics
   stats: () => api.get('/api/admin/stats'),
+
+  // Email users
+  sendEmail: (data: {
+    recipientIds: string[];
+    subject: string;
+    message: string;
+  }) => api.post('/api/admin/send-email', data),
 };
 
 export const auditAPI = {

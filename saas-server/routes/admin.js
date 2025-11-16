@@ -376,4 +376,134 @@ router.get('/stats', authenticate, requireSuperAdmin, async (req, res, next) => 
   }
 });
 
+/**
+ * POST /api/admin/send-email - Send email to user(s)
+ */
+router.post('/send-email',
+  authenticate,
+  requireSuperAdmin,
+  [
+    body('subject').notEmpty().withMessage('Subject is required'),
+    body('message').notEmpty().withMessage('Message is required'),
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { recipientIds, subject, message } = req.body;
+      const { User } = getModels();
+      const postmark = require('postmark');
+
+      // Validate input
+      if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one recipient is required'
+        });
+      }
+
+      // Get Postmark client
+      const serverToken = process.env.POSTMARK_SERVER_TOKEN;
+      if (!serverToken) {
+        return res.status(500).json({
+          success: false,
+          error: 'Email service not configured'
+        });
+      }
+
+      const client = new postmark.ServerClient(serverToken);
+
+      // Fetch recipients
+      const recipients = await User.findAll({
+        where: { id: recipientIds },
+        attributes: ['id', 'email', 'first_name', 'last_name']
+      });
+
+      if (recipients.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'No valid recipients found'
+        });
+      }
+
+      // Send emails
+      const results = await Promise.allSettled(
+        recipients.map(async (recipient) => {
+          const name = `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim() || recipient.email;
+
+          return client.sendEmail({
+            From: process.env.POSTMARK_FROM_EMAIL || 'noreply@focuswithfocal.com',
+            To: recipient.email,
+            Subject: subject,
+            HtmlBody: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${subject}</title>
+              </head>
+              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+                  <h2 style="color: #2563eb; margin-top: 0;">${subject}</h2>
+                  <p>Hello ${name},</p>
+                  <div style="background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    ${message.replace(/\n/g, '<br>')}
+                  </div>
+                  <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px;">
+                    This is an administrative message from Focal Deploy.
+                  </p>
+                  <p style="color: #666; font-size: 14px;">
+                    Best regards,<br>
+                    The Focal Deploy Team
+                  </p>
+                </div>
+              </body>
+              </html>
+            `,
+            TextBody: `
+Hello ${name},
+
+${message}
+
+---
+This is an administrative message from Focal Deploy.
+
+Best regards,
+The Focal Deploy Team
+            `,
+            MessageStream: 'outbound'
+          });
+        })
+      );
+
+      // Count successes and failures
+      const sent = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`✅ [ADMIN] Sent ${sent} emails, ${failed} failed`);
+
+      res.json({
+        success: true,
+        message: `Email sent to ${sent} recipient(s)`,
+        details: {
+          sent,
+          failed,
+          total: recipients.length
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ [ADMIN] Error sending email:', error);
+      next(error);
+    }
+  }
+);
+
 module.exports = router;
