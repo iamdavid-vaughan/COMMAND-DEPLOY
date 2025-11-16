@@ -24,7 +24,7 @@ function generateApiKey() {
  */
 router.get('/', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { ApiKey } = getModels();
 
     const apiKeys = await ApiKey.findAll({
@@ -64,7 +64,7 @@ router.get('/', authenticate, async (req, res) => {
  */
 router.post('/', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { name, permissions, expiresInDays } = req.body;
 
     // Validate input
@@ -136,7 +136,7 @@ router.post('/', authenticate, async (req, res) => {
  */
 router.patch('/:id', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { id } = req.params;
     const { name } = req.body;
 
@@ -182,7 +182,7 @@ router.patch('/:id', authenticate, async (req, res) => {
  */
 router.delete('/:id', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { id } = req.params;
 
     const { ApiKey } = getModels();

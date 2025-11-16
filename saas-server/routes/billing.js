@@ -6,7 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const billingService = require('../services/billing');
-const { Subscription, Invoice, User } = require('../models');
+const { getModels } = require('../models');
 
 /**
  * GET /api/billing/subscription
@@ -14,7 +14,8 @@ const { Subscription, Invoice, User } = require('../models');
  */
 router.get('/subscription', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Subscription } = getModels();
+    const userId = req.user.userId;
 
     const subscription = await Subscription.findOne({
       where: { user_id: userId },
@@ -76,7 +77,8 @@ router.get('/subscription', authenticate, async (req, res) => {
  */
 router.post('/subscribe', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Subscription, User } = getModels();
+    const userId = req.user.userId;
     const { plan, billingCycle, paymentProfile } = req.body;
 
     // Validate plan and billing cycle
@@ -170,7 +172,8 @@ router.post('/subscribe', authenticate, async (req, res) => {
  */
 router.patch('/subscription', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Subscription } = getModels();
+    const userId = req.user.userId;
     const { plan, billingCycle } = req.body;
 
     // Get current subscription
@@ -245,7 +248,8 @@ router.patch('/subscription', authenticate, async (req, res) => {
  */
 router.delete('/subscription', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Subscription } = getModels();
+    const userId = req.user.userId;
 
     const subscription = await Subscription.findOne({
       where: {
@@ -293,7 +297,8 @@ router.delete('/subscription', authenticate, async (req, res) => {
  */
 router.get('/invoices', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Invoice } = getModels();
+    const userId = req.user.userId;
     const { limit = 20, offset = 0 } = req.query;
 
     const invoices = await Invoice.findAll({
@@ -340,7 +345,8 @@ router.get('/invoices', authenticate, async (req, res) => {
  */
 router.post('/payment-method', authenticate, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const { Subscription, User } = getModels();
+    const userId = req.user.userId;
     const { paymentProfile } = req.body;
 
     if (!paymentProfile || !paymentProfile.cardNumber || !paymentProfile.expirationDate) {
