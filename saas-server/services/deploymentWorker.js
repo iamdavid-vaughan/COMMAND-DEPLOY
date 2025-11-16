@@ -9,6 +9,7 @@ const { getModels } = require('../models');
 const { DeploymentBridge } = require('./deploymentBridge');
 const { terminateDeployment } = require('./ec2');
 const { terminateDeploymentComplete } = require('./ec2Enhanced');
+const { sendDeploymentStartedEmail, sendDeploymentSuccessEmail, sendDeploymentFailedEmail } = require('./email');
 
 /**
  * Add log entry for deployment
@@ -74,6 +75,23 @@ async function processDeployment(deploymentId) {
       started_at: new Date(),
     });
     await addLog(deploymentId, 'info', 'Deployment status updated to running');
+
+    // Send deployment started email
+    const { User } = getModels();
+    const user = await User.findByPk(deployment.user_id);
+    if (user && user.email) {
+      try {
+        await sendDeploymentStartedEmail(user.email, user.name || user.email, {
+          id: deploymentId,
+          projectName: deployment.project_name,
+          region: deployment.region,
+          instanceType: deployment.instance_type
+        });
+      } catch (emailError) {
+        console.error(`⚠️  [WORKER] Failed to send deployment started email:`, emailError.message);
+        // Don't fail deployment if email fails
+      }
+    }
 
     // Execute deployment using CLI deployment executor via bridge
     await addLog(deploymentId, 'info', 'Executing deployment using CLI deployment executor...');
@@ -159,6 +177,22 @@ async function processDeployment(deploymentId) {
     console.log(`   S3 Bucket: ${infrastructurePhase.s3BucketName || 'auto-generated'}`);
     console.log(`   SSH Port: ${sshPort}`);
 
+    // Send deployment success email
+    if (user && user.email) {
+      try {
+        await sendDeploymentSuccessEmail(user.email, user.name || user.email, {
+          id: deploymentId,
+          projectName: deployment.project_name,
+          publicIp: publicIp,
+          instanceId: instanceId,
+          domains: deployment.configuration.domains || []
+        });
+      } catch (emailError) {
+        console.error(`⚠️  [WORKER] Failed to send deployment success email:`, emailError.message);
+        // Don't fail deployment if email fails
+      }
+    }
+
     // Clean up temporary project directory
     if (projectPath) {
       await bridge.cleanupProjectDirectory(projectPath);
@@ -185,6 +219,7 @@ async function processDeployment(deploymentId) {
     }
 
     // Update deployment status
+    const { Deployment, User } = getModels();
     const deployment = await Deployment.findByPk(deploymentId);
     if (deployment) {
       await deployment.update({
@@ -192,6 +227,25 @@ async function processDeployment(deploymentId) {
         error_message: error.message,
         completed_at: new Date(),
       });
+
+      // Send deployment failed email (but not for cancelled deployments)
+      if (!isCancelled) {
+        const user = await User.findByPk(deployment.user_id);
+        if (user && user.email) {
+          try {
+            await sendDeploymentFailedEmail(user.email, user.name || user.email, {
+              id: deploymentId,
+              projectName: deployment.project_name,
+              region: deployment.region,
+              instanceType: deployment.instance_type,
+              errorMessage: error.message
+            });
+          } catch (emailError) {
+            console.error(`⚠️  [WORKER] Failed to send deployment failed email:`, emailError.message);
+            // Don't throw - email failure shouldn't cause additional issues
+          }
+        }
+      }
     }
 
     return {
