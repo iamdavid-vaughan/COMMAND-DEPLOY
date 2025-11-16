@@ -3,19 +3,42 @@
  * Handles subscription management, payment processing, and webhooks
  */
 
-const ApiContracts = require('authorizenet').APIContracts;
-const ApiControllers = require('authorizenet').APIControllers;
 const { getModels } = require('../models');
 
-// Initialize Authorize.Net credentials
-const merchantAuthenticationType = new ApiContracts.MerchantAuthenticationType();
-merchantAuthenticationType.setName(process.env.AUTHNET_API_LOGIN_ID);
-merchantAuthenticationType.setTransactionKey(process.env.AUTHNET_TRANSACTION_KEY);
+// Lazy load authorizenet to prevent crashes if not installed
+let ApiContracts, ApiControllers;
+let authorizenetAvailable = false;
 
-// Use sandbox or production
-const environment = process.env.AUTHNET_ENVIRONMENT === 'production'
-  ? ApiContracts.Environment.PRODUCTION
-  : ApiContracts.Environment.SANDBOX;
+try {
+  const authorizenet = require('authorizenet');
+  ApiContracts = authorizenet.APIContracts;
+  ApiControllers = authorizenet.APIControllers;
+  authorizenetAvailable = true;
+} catch (error) {
+  console.warn('⚠️  Authorize.Net module not available. Billing features will be disabled until configured.');
+  authorizenetAvailable = false;
+}
+
+// Initialize Authorize.Net credentials (lazy)
+function getAuthorizeNetConfig() {
+  if (!authorizenetAvailable) {
+    throw new Error('Authorize.Net is not configured. Please install the authorizenet package and configure credentials in the admin settings.');
+  }
+
+  if (!process.env.AUTHNET_API_LOGIN_ID || !process.env.AUTHNET_TRANSACTION_KEY) {
+    throw new Error('Authorize.Net credentials not configured. Please configure them in the admin settings.');
+  }
+
+  const merchantAuthenticationType = new ApiContracts.MerchantAuthenticationType();
+  merchantAuthenticationType.setName(process.env.AUTHNET_API_LOGIN_ID);
+  merchantAuthenticationType.setTransactionKey(process.env.AUTHNET_TRANSACTION_KEY);
+
+  const environment = process.env.AUTHNET_ENVIRONMENT === 'production'
+    ? ApiContracts.Environment.PRODUCTION
+    : ApiContracts.Environment.SANDBOX;
+
+  return { merchantAuthenticationType, environment };
+}
 
 /**
  * Subscription Plans Configuration
@@ -87,6 +110,8 @@ const PLANS = {
  * Create a customer profile in Authorize.Net
  */
 async function createCustomerProfile(userId, email, paymentProfile = null) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
+
   return new Promise((resolve, reject) => {
     const customerProfileType = new ApiContracts.CustomerProfileType();
     customerProfileType.setMerchantCustomerId(userId);
@@ -123,6 +148,7 @@ async function createCustomerProfile(userId, email, paymentProfile = null) {
  * Create a subscription
  */
 async function createSubscription(userId, plan, billingCycle, paymentProfileId, customerProfileId) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
   const { Subscription } = getModels();
 
   return new Promise(async (resolve, reject) => {
@@ -199,6 +225,7 @@ async function createSubscription(userId, plan, billingCycle, paymentProfileId, 
  * Cancel a subscription
  */
 async function cancelSubscription(subscriptionId) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
   const { Subscription } = getModels();
 
   return new Promise(async (resolve, reject) => {
@@ -232,6 +259,8 @@ async function cancelSubscription(subscriptionId) {
  * Get subscription details
  */
 async function getSubscriptionDetails(subscriptionId) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
+
   return new Promise((resolve, reject) => {
     const getRequest = new ApiContracts.ARBGetSubscriptionRequest();
     getRequest.setMerchantAuthentication(merchantAuthenticationType);
