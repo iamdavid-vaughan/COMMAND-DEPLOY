@@ -19,6 +19,8 @@ function initializeModels() {
   const EncryptedCredential = require('./EncryptedCredential')(sequelize);
   const UsageTracking = require('./UsageTracking')(sequelize);
   const ApiKey = require('./ApiKey')(sequelize);
+  const Subscription = require('./Subscription')(sequelize);
+  const Invoice = require('./Invoice')(sequelize);
 
   // Define relationships
   User.hasMany(Deployment, {
@@ -66,6 +68,33 @@ function initializeModels() {
     as: 'deployment'
   });
 
+  User.hasMany(Subscription, {
+    foreignKey: 'user_id',
+    as: 'subscriptions'
+  });
+  Subscription.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  Subscription.hasMany(Invoice, {
+    foreignKey: 'subscription_id',
+    as: 'invoices'
+  });
+  Invoice.belongsTo(Subscription, {
+    foreignKey: 'subscription_id',
+    as: 'subscription'
+  });
+
+  User.hasMany(Invoice, {
+    foreignKey: 'user_id',
+    as: 'invoices'
+  });
+  Invoice.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
   models = {
     User,
     Deployment,
@@ -73,6 +102,8 @@ function initializeModels() {
     EncryptedCredential,
     UsageTracking,
     ApiKey,
+    Subscription,
+    Invoice,
     sequelize
   };
 

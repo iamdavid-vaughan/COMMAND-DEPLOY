@@ -202,16 +202,49 @@ export const usageAPI = {
 };
 
 export const billingAPI = {
-  subscription: () => api.get('/api/billing/subscription'),
+  getSubscription: () => api.get('/api/billing/subscription'),
 
-  invoices: () => api.get('/api/billing/invoices'),
-
-  invoice: (id: string) => api.get(`/api/billing/invoices/${id}`),
+  subscribe: (data: {
+    plan: string;
+    billingCycle: string;
+    paymentProfile: {
+      cardNumber: string;
+      expirationDate: string;
+      cardCode: string;
+      firstName: string;
+      lastName: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+    };
+  }) => api.post('/api/billing/subscribe', data),
 
   updateSubscription: (data: {
-    licenseTier: string;
-    billingCycle: 'monthly' | 'annual';
-  }) => api.post('/api/billing/subscription', data),
+    plan: string;
+    billingCycle?: string;
+  }) => api.patch('/api/billing/subscription', data),
+
+  cancelSubscription: () => api.delete('/api/billing/subscription'),
+
+  getInvoices: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/billing/invoices', { params }),
+
+  updatePaymentMethod: (data: {
+    paymentProfile: {
+      cardNumber: string;
+      expirationDate: string;
+      cardCode: string;
+      firstName: string;
+      lastName: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
+    };
+  }) => api.post('/api/billing/payment-method', data),
+
+  getPlans: () => api.get('/api/billing/plans'),
 };
 
 export const pricingAPI = {
