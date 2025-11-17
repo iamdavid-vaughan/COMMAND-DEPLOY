@@ -317,6 +317,48 @@ export const adminAPI = {
     serverToken: string;
     fromEmail?: string;
   }) => api.put('/api/admin/settings/postmark', data),
+
+  // Pricing tier management
+  getPricingTiers: () => api.get('/api/admin/pricing'),
+
+  getPricingTier: (id: string) => api.get(`/api/admin/pricing/${id}`),
+
+  updatePricingTier: (id: string, data: {
+    name?: string;
+    description?: string;
+    monthlyPrice?: number | null;
+    yearlyPrice?: number | null;
+    features?: string[];
+    limits?: Record<string, any>;
+    displayOrder?: number;
+    isActive?: boolean;
+    apiAccess?: boolean;
+    popular?: boolean;
+    contactSales?: boolean;
+    dfy?: boolean;
+    superAdminIncluded?: boolean;
+    billingOptions?: string[];
+  }) => api.put(`/api/admin/pricing/${id}`, data),
+
+  createPricingTier: (data: {
+    id: string;
+    name: string;
+    description?: string;
+    monthlyPrice?: number | null;
+    yearlyPrice?: number | null;
+    features?: string[];
+    limits?: Record<string, any>;
+    displayOrder?: number;
+    isActive?: boolean;
+    apiAccess?: boolean;
+    popular?: boolean;
+    contactSales?: boolean;
+    dfy?: boolean;
+    superAdminIncluded?: boolean;
+    billingOptions?: string[];
+  }) => api.post('/api/admin/pricing', data),
+
+  deletePricingTier: (id: string) => api.delete(`/api/admin/pricing/${id}`),
 };
 
 export const auditAPI = {

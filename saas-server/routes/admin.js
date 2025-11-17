@@ -506,4 +506,317 @@ The Focal Deploy Team
   }
 );
 
+/**
+ * GET /api/admin/pricing - Get all pricing tiers
+ */
+router.get('/pricing', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { PricingTier } = getModels();
+
+    const tiers = await PricingTier.findAll({
+      order: [['display_order', 'ASC']]
+    });
+
+    console.log(`📊 [ADMIN] Listed ${tiers.length} pricing tiers`);
+
+    res.json({
+      success: true,
+      tiers: tiers.map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        monthlyPrice: t.monthly_price,
+        yearlyPrice: t.yearly_price,
+        features: t.features,
+        limits: t.limits,
+        displayOrder: t.display_order,
+        isActive: t.is_active,
+        apiAccess: t.api_access,
+        popular: t.popular,
+        contactSales: t.contact_sales,
+        dfy: t.dfy,
+        superAdminIncluded: t.super_admin_included,
+        billingOptions: t.billing_options,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at
+      }))
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error listing pricing tiers:', error);
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/pricing/:id - Get specific pricing tier
+ */
+router.get('/pricing/:id', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { PricingTier } = getModels();
+    const tier = await PricingTier.findByPk(req.params.id);
+
+    if (!tier) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Pricing tier not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      tier: {
+        id: tier.id,
+        name: tier.name,
+        description: tier.description,
+        monthlyPrice: tier.monthly_price,
+        yearlyPrice: tier.yearly_price,
+        features: tier.features,
+        limits: tier.limits,
+        displayOrder: tier.display_order,
+        isActive: tier.is_active,
+        apiAccess: tier.api_access,
+        popular: tier.popular,
+        contactSales: tier.contact_sales,
+        dfy: tier.dfy,
+        superAdminIncluded: tier.super_admin_included,
+        billingOptions: tier.billing_options,
+        createdAt: tier.created_at,
+        updatedAt: tier.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error getting pricing tier:', error);
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/pricing/:id - Update pricing tier
+ */
+router.put('/pricing/:id',
+  authenticate,
+  requireSuperAdmin,
+  [
+    body('name').optional().trim().notEmpty(),
+    body('description').optional().trim(),
+    body('monthlyPrice').optional().isFloat({ min: 0 }).withMessage('Monthly price must be a positive number'),
+    body('yearlyPrice').optional().isFloat({ min: 0 }).withMessage('Yearly price must be a positive number'),
+    body('features').optional().isArray(),
+    body('limits').optional().isObject(),
+    body('displayOrder').optional().isInt({ min: 0 }),
+    body('isActive').optional().isBoolean(),
+    body('apiAccess').optional().isBoolean(),
+    body('popular').optional().isBoolean(),
+    body('contactSales').optional().isBoolean(),
+    body('dfy').optional().isBoolean(),
+    body('superAdminIncluded').optional().isBoolean(),
+    body('billingOptions').optional().isArray()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { PricingTier } = getModels();
+      const tier = await PricingTier.findByPk(req.params.id);
+
+      if (!tier) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Pricing tier not found'
+        });
+      }
+
+      const {
+        name,
+        description,
+        monthlyPrice,
+        yearlyPrice,
+        features,
+        limits,
+        displayOrder,
+        isActive,
+        apiAccess,
+        popular,
+        contactSales,
+        dfy,
+        superAdminIncluded,
+        billingOptions
+      } = req.body;
+
+      // Update fields if provided
+      if (name !== undefined) tier.name = name;
+      if (description !== undefined) tier.description = description;
+      if (monthlyPrice !== undefined) tier.monthly_price = monthlyPrice;
+      if (yearlyPrice !== undefined) tier.yearly_price = yearlyPrice;
+      if (features !== undefined) tier.features = features;
+      if (limits !== undefined) tier.limits = limits;
+      if (displayOrder !== undefined) tier.display_order = displayOrder;
+      if (isActive !== undefined) tier.is_active = isActive;
+      if (apiAccess !== undefined) tier.api_access = apiAccess;
+      if (popular !== undefined) tier.popular = popular;
+      if (contactSales !== undefined) tier.contact_sales = contactSales;
+      if (dfy !== undefined) tier.dfy = dfy;
+      if (superAdminIncluded !== undefined) tier.super_admin_included = superAdminIncluded;
+      if (billingOptions !== undefined) tier.billing_options = billingOptions;
+
+      await tier.save();
+
+      console.log(`✅ [ADMIN] Updated pricing tier ${tier.id} by admin ${req.user.email}`);
+
+      res.json({
+        success: true,
+        message: 'Pricing tier updated successfully',
+        tier: {
+          id: tier.id,
+          name: tier.name,
+          description: tier.description,
+          monthlyPrice: tier.monthly_price,
+          yearlyPrice: tier.yearly_price,
+          features: tier.features,
+          limits: tier.limits,
+          displayOrder: tier.display_order,
+          isActive: tier.is_active,
+          apiAccess: tier.api_access,
+          popular: tier.popular,
+          contactSales: tier.contact_sales,
+          dfy: tier.dfy,
+          superAdminIncluded: tier.super_admin_included,
+          billingOptions: tier.billing_options
+        }
+      });
+    } catch (error) {
+      console.error('❌ [ADMIN] Error updating pricing tier:', error);
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/pricing - Create new pricing tier
+ */
+router.post('/pricing',
+  authenticate,
+  requireSuperAdmin,
+  [
+    body('id').trim().notEmpty().withMessage('Tier ID is required'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('description').optional().trim(),
+    body('monthlyPrice').optional().isFloat({ min: 0 }),
+    body('yearlyPrice').optional().isFloat({ min: 0 }),
+    body('features').optional().isArray(),
+    body('limits').optional().isObject(),
+    body('displayOrder').optional().isInt({ min: 0 }),
+    body('isActive').optional().isBoolean(),
+    body('apiAccess').optional().isBoolean(),
+    body('popular').optional().isBoolean(),
+    body('contactSales').optional().isBoolean(),
+    body('dfy').optional().isBoolean(),
+    body('superAdminIncluded').optional().isBoolean(),
+    body('billingOptions').optional().isArray()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          errors: errors.array()
+        });
+      }
+
+      const { PricingTier } = getModels();
+
+      // Check if tier with this ID already exists
+      const existing = await PricingTier.findByPk(req.body.id);
+      if (existing) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Pricing tier with this ID already exists'
+        });
+      }
+
+      const tier = await PricingTier.create({
+        id: req.body.id,
+        name: req.body.name,
+        description: req.body.description || null,
+        monthly_price: req.body.monthlyPrice || null,
+        yearly_price: req.body.yearlyPrice || null,
+        features: req.body.features || [],
+        limits: req.body.limits || {},
+        display_order: req.body.displayOrder || 0,
+        is_active: req.body.isActive !== undefined ? req.body.isActive : true,
+        api_access: req.body.apiAccess || false,
+        popular: req.body.popular || false,
+        contact_sales: req.body.contactSales || false,
+        dfy: req.body.dfy || false,
+        super_admin_included: req.body.superAdminIncluded || false,
+        billing_options: req.body.billingOptions || ['monthly', 'yearly']
+      });
+
+      console.log(`✅ [ADMIN] Created pricing tier ${tier.id} by admin ${req.user.email}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Pricing tier created successfully',
+        tier: {
+          id: tier.id,
+          name: tier.name,
+          description: tier.description,
+          monthlyPrice: tier.monthly_price,
+          yearlyPrice: tier.yearly_price,
+          features: tier.features,
+          limits: tier.limits,
+          displayOrder: tier.display_order,
+          isActive: tier.is_active,
+          apiAccess: tier.api_access,
+          popular: tier.popular,
+          contactSales: tier.contact_sales,
+          dfy: tier.dfy,
+          superAdminIncluded: tier.super_admin_included,
+          billingOptions: tier.billing_options
+        }
+      });
+    } catch (error) {
+      console.error('❌ [ADMIN] Error creating pricing tier:', error);
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/pricing/:id - Delete pricing tier
+ */
+router.delete('/pricing/:id', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { PricingTier } = getModels();
+    const tier = await PricingTier.findByPk(req.params.id);
+
+    if (!tier) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Pricing tier not found'
+      });
+    }
+
+    const tierId = tier.id;
+    await tier.destroy();
+
+    console.log(`🗑️  [ADMIN] Deleted pricing tier ${tierId} by admin ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Pricing tier deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error deleting pricing tier:', error);
+    next(error);
+  }
+});
+
 module.exports = router;

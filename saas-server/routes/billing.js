@@ -429,16 +429,22 @@ router.post('/webhook', async (req, res) => {
  */
 router.get('/plans', async (req, res) => {
   try {
-    const plans = billingService.getPlans();
+    const { PricingTier } = getModels();
+
+    const tiers = await PricingTier.findAll({
+      where: { is_active: true },
+      order: [['display_order', 'ASC']]
+    });
 
     res.json({
       success: true,
-      plans: Object.entries(plans).map(([key, plan]) => ({
-        id: key,
-        name: plan.name,
-        monthlyPrice: plan.monthlyPrice,
-        yearlyPrice: plan.yearlyPrice,
-        features: plan.features
+      plans: tiers.map(tier => ({
+        id: tier.id,
+        name: tier.name,
+        monthlyPrice: tier.monthly_price,
+        yearlyPrice: tier.yearly_price,
+        features: tier.features,
+        limits: tier.limits
       }))
     });
 

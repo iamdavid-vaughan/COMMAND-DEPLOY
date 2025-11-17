@@ -21,6 +21,7 @@ function initializeModels() {
   const ApiKey = require('./ApiKey')(sequelize);
   const Subscription = require('./Subscription')(sequelize);
   const Invoice = require('./Invoice')(sequelize);
+  const PricingTier = require('./PricingTier')(sequelize);
 
   // Define relationships
   User.hasMany(Deployment, {
@@ -104,6 +105,7 @@ function initializeModels() {
     ApiKey,
     Subscription,
     Invoice,
+    PricingTier,
     sequelize
   };
 

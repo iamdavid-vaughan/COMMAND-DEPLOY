@@ -152,7 +152,8 @@ async function createSubscription(userId, plan, billingCycle, paymentProfileId, 
   const { Subscription } = getModels();
 
   return new Promise(async (resolve, reject) => {
-    const planConfig = PLANS[plan];
+    // Fetch plan from database
+    const planConfig = await getPlanById(plan);
     if (!planConfig) {
       return reject(new Error('Invalid plan'));
     }
@@ -341,10 +342,62 @@ async function processWebhook(webhookData) {
 }
 
 /**
- * Get available subscription plans
+ * Get available subscription plans (from database)
  */
-function getPlans() {
-  return PLANS;
+async function getPlans() {
+  try {
+    const { PricingTier } = require('../models').getModels();
+    const tiers = await PricingTier.findAll({
+      where: { is_active: true },
+      order: [['display_order', 'ASC']]
+    });
+
+    // Convert to old PLANS format for backwards compatibility
+    const plans = {};
+    tiers.forEach(tier => {
+      plans[tier.id] = {
+        name: tier.name,
+        monthlyPrice: tier.monthly_price || 0,
+        yearlyPrice: tier.yearly_price || 0,
+        intervalLength: 1,
+        intervalUnit: 'months',
+        features: tier.limits // Use limits for subscription features
+      };
+    });
+
+    return plans;
+  } catch (error) {
+    console.error('Error fetching plans from database, falling back to PLANS constant:', error);
+    // Fallback to hardcoded PLANS if database fetch fails
+    return PLANS;
+  }
+}
+
+/**
+ * Get a specific plan by ID (from database)
+ */
+async function getPlanById(planId) {
+  try {
+    const { PricingTier } = require('../models').getModels();
+    const tier = await PricingTier.findByPk(planId);
+
+    if (!tier) {
+      // Fallback to hardcoded PLANS
+      return PLANS[planId] || null;
+    }
+
+    return {
+      name: tier.name,
+      monthlyPrice: tier.monthly_price || 0,
+      yearlyPrice: tier.yearly_price || 0,
+      intervalLength: 1,
+      intervalUnit: 'months',
+      features: tier.limits
+    };
+  } catch (error) {
+    console.error('Error fetching plan from database, falling back to PLANS constant:', error);
+    return PLANS[planId] || null;
+  }
 }
 
 module.exports = {
@@ -354,5 +407,6 @@ module.exports = {
   cancelSubscription,
   getSubscriptionDetails,
   processWebhook,
-  getPlans
+  getPlans,
+  getPlanById
 };
