@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { deploymentsAPI } from '@/lib/api';
 import {
   Rocket, ChevronRight, ChevronLeft, Server, Shield,
-  GitBranch, Globe, CheckCircle, AlertCircle, X
+  GitBranch, Globe, CheckCircle, AlertCircle, X, Cloud
 } from 'lucide-react';
 
 // Wizard Steps
@@ -29,12 +29,31 @@ const AWS_REGIONS = [
   { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
 ];
 
-const INSTANCE_TYPES = [
+const GCP_REGIONS = [
+  { value: 'us-central1', label: 'US Central (Iowa)' },
+  { value: 'us-east1', label: 'US East (South Carolina)' },
+  { value: 'us-west1', label: 'US West (Oregon)' },
+  { value: 'us-west2', label: 'US West (Los Angeles)' },
+  { value: 'europe-west1', label: 'Europe West (Belgium)' },
+  { value: 'europe-west2', label: 'Europe West (London)' },
+  { value: 'asia-southeast1', label: 'Asia Southeast (Singapore)' },
+  { value: 'asia-northeast1', label: 'Asia Northeast (Tokyo)' },
+];
+
+const AWS_INSTANCE_TYPES = [
   { value: 't3.micro', label: 't3.micro - 1 vCPU, 1GB RAM (Free Tier)', cost: '$0/mo*' },
   { value: 't3.small', label: 't3.small - 2 vCPU, 2GB RAM', cost: '$15/mo' },
   { value: 't3.medium', label: 't3.medium - 2 vCPU, 4GB RAM', cost: '$30/mo' },
   { value: 't3.large', label: 't3.large - 2 vCPU, 8GB RAM', cost: '$60/mo' },
   { value: 'm5.large', label: 'm5.large - 2 vCPU, 8GB RAM', cost: '$70/mo' },
+];
+
+const GCP_MACHINE_TYPES = [
+  { value: 'e2-micro', label: 'e2-micro - 0.25-2 vCPU, 1GB RAM (Free Tier)', cost: '$0/mo*' },
+  { value: 'e2-small', label: 'e2-small - 0.5-2 vCPU, 2GB RAM', cost: '$13/mo' },
+  { value: 'e2-medium', label: 'e2-medium - 1-2 vCPU, 4GB RAM', cost: '$27/mo' },
+  { value: 'n1-standard-1', label: 'n1-standard-1 - 1 vCPU, 3.75GB RAM', cost: '$25/mo' },
+  { value: 'n1-standard-2', label: 'n1-standard-2 - 2 vCPU, 7.5GB RAM', cost: '$50/mo' },
 ];
 
 const OS_OPTIONS = [
@@ -58,6 +77,7 @@ export default function NewDeploymentWizardPage() {
   // Wizard form data
   const [formData, setFormData] = useState({
     // Step 1: Project
+    provider: 'aws' as 'aws' | 'gcp',
     projectName: '',
     region: 'us-east-1',
     instanceType: 't3.micro',
@@ -110,6 +130,7 @@ export default function NewDeploymentWizardPage() {
 
     try {
       const payload = {
+        provider: formData.provider, // 'aws' or 'gcp'
         projectName: formData.projectName,
         region: formData.region,
         instanceType: formData.instanceType,
@@ -253,6 +274,64 @@ export default function NewDeploymentWizardPage() {
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Project Configuration</h2>
 
+            {/* Cloud Provider Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Cloud Provider <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      provider: 'aws',
+                      region: 'us-east-1',
+                      instanceType: 't3.micro'
+                    });
+                  }}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    formData.provider === 'aws'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Cloud className={`w-6 h-6 ${formData.provider === 'aws' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span className={`font-semibold ${formData.provider === 'aws' ? 'text-blue-900' : 'text-gray-900'}`}>
+                      Amazon AWS
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">EC2, S3, Free Tier available</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      provider: 'gcp',
+                      region: 'us-central1',
+                      instanceType: 'e2-micro'
+                    });
+                  }}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    formData.provider === 'gcp'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Cloud className={`w-6 h-6 ${formData.provider === 'gcp' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span className={`font-semibold ${formData.provider === 'gcp' ? 'text-blue-900' : 'text-gray-900'}`}>
+                      Google Cloud
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Compute Engine, Cloud Storage, Free Tier available</p>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Project Name <span className="text-red-500">*</span>
@@ -266,18 +345,20 @@ export default function NewDeploymentWizardPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="mt-1 text-sm text-gray-500">
-                Alphanumeric and hyphens only. Used for AWS resource naming.
+                Alphanumeric and hyphens only. Used for {formData.provider.toUpperCase()} resource naming.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">AWS Region</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {formData.provider === 'aws' ? 'AWS Region' : 'GCP Region'}
+              </label>
               <select
                 value={formData.region}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {AWS_REGIONS.map((region) => (
+                {(formData.provider === 'aws' ? AWS_REGIONS : GCP_REGIONS).map((region) => (
                   <option key={region.value} value={region.value}>
                     {region.label}
                   </option>
@@ -286,9 +367,11 @@ export default function NewDeploymentWizardPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Instance Type</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {formData.provider === 'aws' ? 'Instance Type' : 'Machine Type'}
+              </label>
               <div className="space-y-2">
-                {INSTANCE_TYPES.map((type) => (
+                {(formData.provider === 'aws' ? AWS_INSTANCE_TYPES : GCP_MACHINE_TYPES).map((type) => (
                   <label
                     key={type.value}
                     className="flex items-center justify-between p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
