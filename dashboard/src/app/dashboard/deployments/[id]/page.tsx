@@ -17,7 +17,8 @@ import {
   Copy,
   Key,
   Shield,
-  Database
+  Database,
+  Trash2
 } from 'lucide-react';
 import { deploymentsAPI } from '@/lib/api';
 
@@ -66,6 +67,8 @@ export default function DeploymentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch deployment details
@@ -96,6 +99,33 @@ export default function DeploymentDetailPage() {
       }, 100);
     } catch (err: any) {
       console.error('Failed to fetch logs:', err);
+    }
+  };
+
+  // Handle deployment deletion
+  const handleDelete = async () => {
+    if (!deployment) return;
+
+    // Cannot delete running deployments
+    if (deployment.status === 'running' || deployment.status === 'pending') {
+      alert('Cannot delete a running deployment. Please wait for it to complete or fail.');
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deploymentsAPI.delete(deploymentId);
+
+      // Show success message
+      alert('Deployment deleted successfully. AWS resources are being terminated in the background.');
+
+      // Redirect to deployments list
+      router.push('/dashboard/deployments');
+    } catch (err: any) {
+      console.error('Failed to delete deployment:', err);
+      alert(err.response?.data?.message || 'Failed to delete deployment');
+      setDeleting(false);
+      setShowDeleteModal(false);
     }
   };
 
@@ -242,16 +272,30 @@ export default function DeploymentDetailPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              fetchDeployment();
-              fetchLogs();
-            }}
-            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                fetchDeployment();
+                fetchLogs();
+              }}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+
+            {/* Delete Button - only show for completed/failed/terminated deployments */}
+            {deployment.status !== 'running' && deployment.status !== 'pending' && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="px-4 py-2 bg-red-600 border border-red-600 text-white rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-2"
+                title="Delete deployment and cleanup AWS resources"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -486,6 +530,64 @@ export default function DeploymentDetailPage() {
           <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-sm">
             {JSON.stringify(deployment.configuration, null, 2)}
           </pre>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Delete Deployment
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete <strong>{deployment.projectName}</strong>?
+                </p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>⚠️ Warning:</strong> This will:
+                  </p>
+                  <ul className="text-sm text-yellow-700 list-disc list-inside mt-2 space-y-1">
+                    <li>Terminate the EC2 instance ({deployment.instanceId || 'if exists'})</li>
+                    <li>Delete the SSH keypair</li>
+                    <li>Remove the deployment record</li>
+                    <li>This action cannot be undone</li>
+                  </ul>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                  >
+                    {deleting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
