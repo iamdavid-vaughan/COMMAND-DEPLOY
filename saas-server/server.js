@@ -59,6 +59,12 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 /**
+ * Trust proxy - Required when behind Nginx/load balancer
+ * This allows express-rate-limit to correctly identify users via X-Forwarded-For header
+ */
+app.set('trust proxy', 1);
+
+/**
  * Security Middleware
  */
 app.use(helmet({
