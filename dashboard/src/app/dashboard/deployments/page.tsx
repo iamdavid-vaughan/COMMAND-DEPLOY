@@ -70,16 +70,35 @@ export default function DeploymentsPage() {
     setRefreshing(false);
   };
 
-  const handleDelete = async (id: string, projectName: string) => {
-    if (!confirm(`Are you sure you want to delete deployment "${projectName}"?`)) {
+  const handleDeleteClick = (deployment: Deployment) => {
+    // Prevent deletion of running deployments
+    if (deployment.status === 'running' || deployment.status === 'pending' || deployment.status === 'deploying') {
+      alert('Cannot delete a running deployment. Please wait for it to complete or fail.');
       return;
     }
 
+    setDeploymentToDelete(deployment);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deploymentToDelete) return;
+
     try {
-      await deploymentsAPI.delete(id);
-      setDeployments(deployments.filter((d) => d.id !== id));
+      setDeleting(true);
+      await deploymentsAPI.delete(deploymentToDelete.id);
+
+      // Remove from list
+      setDeployments(deployments.filter((d) => d.id !== deploymentToDelete.id));
+
+      // Close modal and reset
+      setShowDeleteModal(false);
+      setDeploymentToDelete(null);
+      setDeleting(false);
     } catch (err: any) {
+      console.error('Failed to delete deployment:', err);
       alert(err.response?.data?.message || 'Failed to delete deployment');
+      setDeleting(false);
     }
   };
 
@@ -328,8 +347,14 @@ export default function DeploymentsPage() {
                           View
                         </Link>
                         <button
-                          onClick={() => handleDelete(deployment.id, deployment.project_name)}
-                          className="text-red-600 hover:text-red-900"
+                          onClick={() => handleDeleteClick(deployment)}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={deployment.status === 'running' || deployment.status === 'pending' || deployment.status === 'deploying'}
+                          title={
+                            deployment.status === 'running' || deployment.status === 'pending' || deployment.status === 'deploying'
+                              ? 'Cannot delete running deployment'
+                              : 'Delete deployment'
+                          }
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -347,6 +372,69 @@ export default function DeploymentsPage() {
       {filteredDeployments.length > 0 && (
         <div className="text-sm text-gray-500">
           Showing {filteredDeployments.length} of {deployments.length} deployments
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deploymentToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Delete Deployment
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Are you sure you want to delete <strong>{deploymentToDelete.project_name}</strong>?
+                </p>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>⚠️ Warning:</strong> This will:
+                  </p>
+                  <ul className="text-sm text-yellow-700 list-disc list-inside mt-2 space-y-1">
+                    <li>Terminate the EC2 instance ({deploymentToDelete.instance_id || 'if exists'})</li>
+                    <li>Delete the SSH keypair</li>
+                    <li>Remove the deployment record</li>
+                    <li>This action cannot be undone</li>
+                  </ul>
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setDeploymentToDelete(null);
+                    }}
+                    disabled={deleting}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                  >
+                    {deleting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
