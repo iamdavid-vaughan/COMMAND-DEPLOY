@@ -35,7 +35,7 @@ const requireAuth = (req, res, next) => {
 router.get('/logs', requireAuth, async (req, res) => {
   try {
     const auditLogger = new AuditLogger({
-      logPath: `./audit-logs/${req.user.id}-audit.json`
+      logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
     const filters = {};
@@ -80,7 +80,7 @@ router.get('/logs', requireAuth, async (req, res) => {
 router.get('/statistics', requireAuth, async (req, res) => {
   try {
     const auditLogger = new AuditLogger({
-      logPath: `./audit-logs/${req.user.id}-audit.json`
+      logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
     const stats = await auditLogger.getStatistics();
@@ -106,7 +106,7 @@ router.get('/statistics', requireAuth, async (req, res) => {
 router.post('/log', requireAuth, async (req, res) => {
   try {
     const auditLogger = new AuditLogger({
-      logPath: `./audit-logs/${req.user.id}-audit.json`
+      logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
     const {
@@ -151,11 +151,11 @@ router.post('/log', requireAuth, async (req, res) => {
 router.post('/export', requireAuth, async (req, res) => {
   try {
     const auditLogger = new AuditLogger({
-      logPath: `./audit-logs/${req.user.id}-audit.json`
+      logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
     const filters = req.body.filters || {};
-    const outputPath = `./audit-exports/${req.user.id}-audit-export-${Date.now()}.json`;
+    const outputPath = `./audit-exports/${req.user.userId}-audit-export-${Date.now()}.json`;
 
     await auditLogger.export(outputPath, filters);
 
@@ -184,11 +184,11 @@ router.post('/export', requireAuth, async (req, res) => {
 router.delete('/clear', requireAuth, async (req, res) => {
   try {
     const auditLogger = new AuditLogger({
-      logPath: `./audit-logs/${req.user.id}-audit.json`
+      logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
     // Create backup before clearing
-    const backupPath = `./audit-exports/${req.user.id}-audit-backup-${Date.now()}.json`;
+    const backupPath = `./audit-exports/${req.user.userId}-audit-backup-${Date.now()}.json`;
     await auditLogger.export(backupPath);
 
     // Clear the logs

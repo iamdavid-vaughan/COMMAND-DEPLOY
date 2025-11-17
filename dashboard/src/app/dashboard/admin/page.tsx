@@ -19,6 +19,8 @@ import {
   Activity,
   UserCheck,
   Settings,
+  Mail,
+  Eye,
 } from 'lucide-react';
 
 interface User {
@@ -64,6 +66,7 @@ export default function AdminPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
+  const [viewDetailsModalOpen, setViewDetailsModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -188,6 +191,35 @@ export default function AdminPage() {
         type: 'error',
         text: err.response?.data?.message || 'Failed to delete user',
       });
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!selectedUser || !emailSubject || !emailMessage) return;
+
+    try {
+      setSendingEmail(true);
+      await adminAPI.sendEmail({
+        recipientIds: [selectedUser.id],
+        subject: emailSubject,
+        message: emailMessage,
+      });
+
+      setMessage({
+        type: 'success',
+        text: 'Email sent successfully',
+      });
+
+      setEmailModalOpen(false);
+      setEmailSubject('');
+      setEmailMessage('');
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to send email',
+      });
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -473,9 +505,30 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setSelectedUser(u);
+                              setViewDetailsModalOpen(true);
+                            }}
+                            className="text-gray-600 hover:text-gray-900"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setEmailModalOpen(true);
+                            }}
+                            className="text-purple-600 hover:text-purple-900"
+                            title="Email User"
+                          >
+                            <Mail className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedUser(u);
                               setEditModalOpen(true);
                             }}
                             className="text-blue-600 hover:text-blue-900"
+                            title="Edit User"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
@@ -485,6 +538,7 @@ export default function AdminPage() {
                               setResetPasswordModalOpen(true);
                             }}
                             className="text-yellow-600 hover:text-yellow-900"
+                            title="Reset Password"
                           >
                             <Key className="w-4 h-4" />
                           </button>
@@ -494,6 +548,7 @@ export default function AdminPage() {
                               setDeleteModalOpen(true);
                             }}
                             className="text-red-600 hover:text-red-900"
+                            title="Delete User"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -562,6 +617,32 @@ export default function AdminPage() {
           user={selectedUser}
           onClose={() => setDeleteModalOpen(false)}
           onConfirm={handleDeleteUser}
+        />
+      )}
+
+      {/* View Details Modal */}
+      {viewDetailsModalOpen && selectedUser && (
+        <ViewDetailsModal
+          user={selectedUser}
+          onClose={() => setViewDetailsModalOpen(false)}
+        />
+      )}
+
+      {/* Email User Modal */}
+      {emailModalOpen && selectedUser && (
+        <EmailUserModal
+          user={selectedUser}
+          subject={emailSubject}
+          message={emailMessage}
+          sending={sendingEmail}
+          onSubjectChange={setEmailSubject}
+          onMessageChange={setEmailMessage}
+          onClose={() => {
+            setEmailModalOpen(false);
+            setEmailSubject('');
+            setEmailMessage('');
+          }}
+          onSend={handleSendEmail}
         />
       )}
     </div>
@@ -793,6 +874,255 @@ function DeleteUserModal({
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
           >
             Delete User
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// View Details Modal Component
+function ViewDetailsModal({
+  user,
+  onClose,
+}: {
+  user: User;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-900">User Details</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">
+                Full Name
+              </label>
+              <p className="text-base text-gray-900">
+                {user.name || 'N/A'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">
+                Email Address
+              </label>
+              <p className="text-base text-gray-900">{user.email}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">
+                First Name
+              </label>
+              <p className="text-base text-gray-900">{user.firstName || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-1">
+                Last Name
+              </label>
+              <p className="text-base text-gray-900">{user.lastName || 'N/A'}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-500 mb-1">
+              Company Name
+            </label>
+            <p className="text-base text-gray-900">{user.companyName || 'Not provided'}</p>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Information</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  License Tier
+                </label>
+                <span
+                  className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
+                    user.licenseTier === 'enterprise'
+                      ? 'bg-purple-100 text-purple-800'
+                      : user.licenseTier === 'max'
+                      ? 'bg-blue-100 text-blue-800'
+                      : user.licenseTier === 'pro'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {user.licenseTier}
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Account Status
+                </label>
+                <span
+                  className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
+                    user.status === 'active'
+                      ? 'bg-green-100 text-green-800'
+                      : user.status === 'suspended'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}
+                >
+                  {user.status}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Role
+                </label>
+                <p className="text-base text-gray-900">{user.role || 'user'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  User ID
+                </label>
+                <p className="text-xs text-gray-500 font-mono">{user.id}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Account Created
+                </label>
+                <p className="text-base text-gray-900">
+                  {new Date(user.createdAt).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Last Login
+                </label>
+                <p className="text-base text-gray-900">
+                  {user.lastLoginAt
+                    ? new Date(user.lastLoginAt).toLocaleString()
+                    : 'Never'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-200 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Email User Modal Component
+function EmailUserModal({
+  user,
+  subject,
+  message,
+  sending,
+  onSubjectChange,
+  onMessageChange,
+  onClose,
+  onSend,
+}: {
+  user: User;
+  subject: string;
+  message: string;
+  sending: boolean;
+  onSubjectChange: (value: string) => void;
+  onMessageChange: (value: string) => void;
+  onClose: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Send Email to User</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Sending to: <span className="font-medium">{user.name}</span> ({user.email})
+          </p>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Subject *
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => onSubjectChange(e.target.value)}
+              placeholder="Enter email subject"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={sending}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Message *
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => onMessageChange(e.target.value)}
+              placeholder="Enter your message..."
+              rows={10}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={sending}
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              This email will be sent from your configured Postmark account.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={sending}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSend}
+            disabled={!subject || !message || sending}
+            className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {sending ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail className="w-4 h-4" />
+                Send Email
+              </>
+            )}
           </button>
         </div>
       </div>
