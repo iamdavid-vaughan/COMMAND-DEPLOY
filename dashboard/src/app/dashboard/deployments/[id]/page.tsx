@@ -18,9 +18,11 @@ import {
   Key,
   Shield,
   Database,
-  Trash2
+  Trash2,
+  Rocket
 } from 'lucide-react';
 import { deploymentsAPI } from '@/lib/api';
+import MetricsDashboard from '@/components/MetricsDashboard';
 
 interface DeploymentLog {
   id: string;
@@ -284,6 +286,18 @@ export default function DeploymentDetailPage() {
               Refresh
             </button>
 
+            {/* Deploy Application Button - only show for completed deployments */}
+            {deployment.status === 'completed' && (
+              <button
+                onClick={() => router.push(`/dashboard/deployments/${deploymentId}/deploy`)}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all inline-flex items-center gap-2 font-semibold"
+                title="Deploy your application to this server"
+              >
+                <Rocket className="w-4 h-4" />
+                Deploy Application
+              </button>
+            )}
+
             {/* Delete Button - only show for completed/failed/terminated deployments */}
             {deployment.status !== 'running' && deployment.status !== 'pending' && (
               <button
@@ -472,6 +486,17 @@ export default function DeploymentDetailPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Server Metrics */}
+      {deployment.status === 'completed' && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Server Metrics</h2>
+          </div>
+          <MetricsDashboard deploymentId={deploymentId} autoRefresh={autoRefresh} />
         </div>
       )}
 
