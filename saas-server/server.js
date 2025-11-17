@@ -27,7 +27,8 @@ const rateLimit = require('express-rate-limit');
 const chalk = require('chalk');
 
 // Import routes
-const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/authNew'); // New email-first authentication
+const oauthRoutes = require('./routes/oauth'); // OAuth (Google/GitHub)
 const twoFactorAuthRoutes = require('./routes/twoFactorAuth');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
@@ -160,7 +161,8 @@ app.use((req, res, next) => {
  */
 app.use('/api/health', healthRoutes);
 app.use('/api/auth/2fa', twoFactorAuthRoutes); // 2FA routes (must come before /api/auth)
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRoutes); // Email-first authentication
+app.use('/api/oauth', oauthRoutes); // OAuth (Google/GitHub)
 app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/user', authenticate, userRoutes);
 app.use('/api/admin', authenticate, adminRoutes);
@@ -242,6 +244,12 @@ async function startServer() {
 
     // Store stopWorker function for graceful shutdown
     global.stopDeploymentWorker = stopWorker;
+
+    // Initialize Account Cleanup Cron Job
+    console.log(chalk.gray('🧹 Initializing account cleanup cron job...'));
+    const { initializeCleanupCron } = require('./services/accountCleanupService');
+    initializeCleanupCron();
+    console.log(chalk.green('✅ Cleanup cron job initialized (runs daily at 2 AM)\n'));
 
     // Start Server
     app.listen(PORT, () => {

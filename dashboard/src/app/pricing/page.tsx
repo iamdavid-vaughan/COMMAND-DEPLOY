@@ -138,6 +138,9 @@ export default function PricingPage() {
       return 'Custom';
     }
     const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+    if (price === undefined || price === null) {
+      return '$0';
+    }
     return `$${price}`;
   };
 
@@ -145,7 +148,10 @@ export default function PricingPage() {
     if (plan.id === 'enterprise') {
       return 'Contact us';
     }
-    const price = billingCycle === 'monthly' ? plan.monthlyPrice : Math.floor(plan.yearlyPrice / 12);
+    const price = billingCycle === 'monthly' ? plan.monthlyPrice : (plan.yearlyPrice ? Math.floor(plan.yearlyPrice / 12) : 0);
+    if (price === undefined || price === null) {
+      return '$0/mo';
+    }
     return `$${price}/mo`;
   };
 
