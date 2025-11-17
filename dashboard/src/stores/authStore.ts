@@ -35,6 +35,7 @@ interface AuthState {
   register: (email: string, password: string, name: string, company?: string) => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
+  setAuth: (user: User, token: string) => void;
   clearError: () => void;
   initAuth: () => void;
 }
@@ -157,6 +158,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setUser: (user: User) => {
     set({ user });
     localStorage.setItem('focal_user', JSON.stringify(user));
+  },
+
+  setAuth: (user: User, token: string) => {
+    console.log('🔐 [AUTH] setAuth called with user:', user, 'token:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+
+    // Store token and user
+    localStorage.setItem('focal_auth_token', token);
+    localStorage.setItem('focal_user', JSON.stringify(user));
+
+    // Update state
+    set({ user, token, error: null });
+
+    console.log('🔐 [AUTH] setAuth completed');
   },
 
   clearError: () => {
