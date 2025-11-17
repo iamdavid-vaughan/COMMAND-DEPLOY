@@ -528,4 +528,136 @@ router.get('/:id/logs',
   }
 );
 
+/**
+ * POST /api/deployments/:id/deploy-app - Deploy application to existing server
+ */
+router.post('/:id/deploy-app',
+  [
+    param('id').isUUID().withMessage('Invalid deployment ID'),
+    body('sourceType').isIn(['github', 'zip', 'template']).withMessage('Invalid source type'),
+    body('sourceUrl').optional().isString(),
+    body('templateId').optional().isUUID(),
+    body('framework').optional().isString(),
+    body('envVars').optional().isObject(),
+    body('buildCommand').optional().isString(),
+    body('startCommand').optional().isString(),
+    body('port').optional().isInt({ min: 1, max: 65535 })
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { Deployment } = getModels();
+      const DeploymentOrchestrator = require('../services/deploymentOrchestrator');
+
+      const userId = req.user.userId;
+      const deploymentId = req.params.id;
+      const { sourceType, sourceUrl, templateId, framework, envVars, buildCommand, startCommand, port } = req.body;
+
+      // Fetch deployment
+      const deployment = await Deployment.findOne({
+        where: {
+          id: deploymentId,
+          user_id: userId
+        }
+      });
+
+      if (!deployment) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Deployment not found'
+        });
+      }
+
+      // Verify deployment is in completed state (infrastructure ready)
+      if (deployment.status !== 'completed') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: `Cannot deploy application. Infrastructure status is: ${deployment.status}. Please wait for infrastructure to be ready.`
+        });
+      }
+
+      // Verify we have SSH access
+      if (!deployment.public_ip || !deployment.configuration?.ssh) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Deployment does not have SSH configuration'
+        });
+      }
+
+      // Determine source URL
+      let finalSourceUrl = sourceUrl;
+      if (sourceType === 'template' && templateId) {
+        finalSourceUrl = templateId;
+      }
+
+      if (!finalSourceUrl) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'sourceUrl or templateId is required'
+        });
+      }
+
+      // Start deployment in background
+      const orchestrator = new DeploymentOrchestrator(deployment);
+
+      // Send immediate response
+      res.json({
+        success: true,
+        message: 'Application deployment started',
+        deploymentId: deployment.id,
+        status: 'deploying'
+      });
+
+      // Run deployment asynchronously
+      orchestrator.deploy({
+        sourceType,
+        sourceUrl: finalSourceUrl,
+        framework,
+        envVars,
+        buildCommand,
+        startCommand,
+        port
+      }).then(result => {
+        console.log(`✅ [Deploy App] Deployment ${deploymentId} completed successfully`);
+      }).catch(error => {
+        console.error(`❌ [Deploy App] Deployment ${deploymentId} failed:`, error.message);
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/templates - List available deployment templates
+ */
+router.get('/templates', async (req, res, next) => {
+  try {
+    const { DeploymentTemplate } = getModels();
+
+    const templates = await DeploymentTemplate.findAll({
+      where: { is_active: true },
+      order: [['is_featured', 'DESC'], ['display_order', 'ASC']],
+      attributes: [
+        'id', 'name', 'slug', 'description', 'category', 'framework',
+        'icon_url', 'banner_url', 'documentation_url', 'is_featured',
+        'requires_database', 'requires_redis', 'min_ram_mb', 'min_disk_gb'
+      ]
+    });
+
+    res.json({
+      success: true,
+      templates: templates
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

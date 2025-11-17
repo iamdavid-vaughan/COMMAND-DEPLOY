@@ -17,6 +17,7 @@ ALTER TABLE deployments ADD COLUMN IF NOT EXISTS app_port INTEGER DEFAULT 3000;
 ALTER TABLE deployments ADD COLUMN IF NOT EXISTS app_env_vars JSONB;
 ALTER TABLE deployments ADD COLUMN IF NOT EXISTS app_deployed_at TIMESTAMP;
 ALTER TABLE deployments ADD COLUMN IF NOT EXISTS app_status VARCHAR(50) DEFAULT 'not_deployed';
+ALTER TABLE deployments ADD COLUMN IF NOT EXISTS monitoring_token VARCHAR(255);
 
 COMMENT ON COLUMN deployments.app_framework IS 'Detected framework: nextjs, wordpress, nodejs, react, laravel, django, static, etc.';
 COMMENT ON COLUMN deployments.app_source_type IS 'Source type: github, zip, template, manual';
@@ -27,6 +28,7 @@ COMMENT ON COLUMN deployments.app_port IS 'Application port (3000, 8080, 80, etc
 COMMENT ON COLUMN deployments.app_env_vars IS 'Environment variables as JSON key-value pairs';
 COMMENT ON COLUMN deployments.app_deployed_at IS 'Timestamp when application was successfully deployed';
 COMMENT ON COLUMN deployments.app_status IS 'Application status: not_deployed, deploying, deployed, failed, stopped';
+COMMENT ON COLUMN deployments.monitoring_token IS 'Authentication token for monitoring agent on this deployment';
 
 -- ============================================
 -- PART 2: Server Monitoring Schema
