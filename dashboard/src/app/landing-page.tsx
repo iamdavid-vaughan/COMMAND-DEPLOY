@@ -292,8 +292,8 @@ export default function LandingPage() {
               <div className="text-gray-600">Average Deploy Time</div>
             </div>
             <div>
-              <div className="text-4xl font-bold text-blue-600 mb-2">SOC 2</div>
-              <div className="text-gray-600">Certified Security</div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">256-bit</div>
+              <div className="text-gray-600">Data Encryption</div>
             </div>
           </div>
         </div>
