@@ -59,6 +59,16 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showPaymentMethod, setShowPaymentMethod] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [upgrading, setUpgrading] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState({
+    cardNumber: '',
+    expirationDate: '',
+    cvv: '',
+    zipCode: '',
+  });
+  const [updatingPayment, setUpdatingPayment] = useState(false);
 
   useEffect(() => {
     fetchBillingData();
@@ -101,6 +111,57 @@ export default function BillingPage() {
       fetchBillingData();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to cancel subscription');
+    }
+  };
+
+  const handleUpgradePlan = async () => {
+    if (!selectedPlan) {
+      setError('Please select a plan');
+      return;
+    }
+
+    try {
+      setUpgrading(true);
+      setError(null);
+      await billingAPI.updateSubscription({
+        plan: selectedPlan,
+        billingCycle: selectedBillingCycle,
+      });
+      alert('Plan updated successfully');
+      setShowUpgrade(false);
+      fetchBillingData();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update plan');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handleUpdatePaymentMethod = async () => {
+    if (!paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cvv) {
+      setError('Please fill in all payment information');
+      return;
+    }
+
+    try {
+      setUpdatingPayment(true);
+      setError(null);
+      await billingAPI.updatePaymentMethod({
+        paymentProfile: {
+          cardNumber: paymentInfo.cardNumber,
+          expirationDate: paymentInfo.expirationDate,
+          cvv: paymentInfo.cvv,
+          zipCode: paymentInfo.zipCode,
+        },
+      });
+      alert('Payment method updated successfully');
+      setShowPaymentMethod(false);
+      setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+      fetchBillingData();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update payment method');
+    } finally {
+      setUpdatingPayment(false);
     }
   };
 
@@ -362,49 +423,258 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* Upgrade Modal Placeholder */}
+      {/* Upgrade Plan Modal */}
       {showUpgrade && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Change Plan</h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500">
-                  Plan upgrade/downgrade functionality will be available soon.
-                </p>
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-8 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Change Plan</h3>
+              <button
+                onClick={() => {
+                  setShowUpgrade(false);
+                  setError(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
               </div>
-              <div className="items-center px-4 py-3">
+            )}
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Billing Cycle
+              </label>
+              <div className="flex gap-4">
                 <button
-                  onClick={() => setShowUpgrade(false)}
-                  className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700"
+                  onClick={() => setSelectedBillingCycle('monthly')}
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${
+                    selectedBillingCycle === 'monthly'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
                 >
-                  Close
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setSelectedBillingCycle('yearly')}
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${
+                    selectedBillingCycle === 'yearly'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  Yearly <span className="text-xs text-green-600">(Save 20%)</span>
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              {plans.map((plan) => {
+                const price =
+                  selectedBillingCycle === 'monthly'
+                    ? plan.monthlyPrice
+                    : plan.yearlyPrice;
+                const isCurrentPlan = subscription?.plan === plan.id;
+
+                return (
+                  <div
+                    key={plan.id}
+                    onClick={() => !isCurrentPlan && setSelectedPlan(plan.id)}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedPlan === plan.id
+                        ? 'border-blue-600 bg-blue-50'
+                        : isCurrentPlan
+                        ? 'border-green-500 bg-green-50 cursor-not-allowed'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-lg">{plan.name}</h4>
+                          {isCurrentPlan && (
+                            <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                              Current Plan
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">
+                          ${price}
+                          <span className="text-sm font-normal text-gray-500">
+                            /{selectedBillingCycle === 'monthly' ? 'mo' : 'yr'}
+                          </span>
+                        </p>
+                        <ul className="mt-3 space-y-1 text-sm text-gray-600">
+                          <li>• {plan.features.deploymentsPerMonth} deployments/month</li>
+                          <li>• {plan.features.maxInstances} max instances</li>
+                          <li>• {plan.features.maxDomains} domains</li>
+                          <li>• {plan.features.support} support</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowUpgrade(false);
+                  setError(null);
+                }}
+                disabled={upgrading}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpgradePlan}
+                disabled={!selectedPlan || upgrading}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {upgrading ? 'Updating...' : 'Update Plan'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Payment Method Modal Placeholder */}
+      {/* Payment Method Modal */}
       {showPaymentMethod && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Update Payment Method</h3>
-              <div className="mt-2 px-7 py-3">
-                <p className="text-sm text-gray-500">
-                  Payment method update functionality will be available soon.
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-8 border w-full max-w-md shadow-lg rounded-lg bg-white">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Update Payment Method</h3>
+              <button
+                onClick={() => {
+                  setShowPaymentMethod(false);
+                  setError(null);
+                  setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Card Number *
+                </label>
+                <input
+                  type="text"
+                  placeholder="1234 5678 9012 3456"
+                  maxLength={19}
+                  value={paymentInfo.cardNumber}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s/g, '');
+                    const formatted = value.match(/.{1,4}/g)?.join(' ') || value;
+                    setPaymentInfo({ ...paymentInfo, cardNumber: formatted });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={updatingPayment}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Expiration Date *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="MM/YY"
+                    maxLength={5}
+                    value={paymentInfo.expirationDate}
+                    onChange={(e) => {
+                      let value = e.target.value.replace(/\D/g, '');
+                      if (value.length >= 2) {
+                        value = value.slice(0, 2) + '/' + value.slice(2, 4);
+                      }
+                      setPaymentInfo({ ...paymentInfo, expirationDate: value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={updatingPayment}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    CVV *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="123"
+                    maxLength={4}
+                    value={paymentInfo.cvv}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      setPaymentInfo({ ...paymentInfo, cvv: value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={updatingPayment}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="12345"
+                  maxLength={10}
+                  value={paymentInfo.zipCode}
+                  onChange={(e) =>
+                    setPaymentInfo({ ...paymentInfo, zipCode: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={updatingPayment}
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                <p className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>Your payment information is securely processed through Authorize.Net.</span>
                 </p>
               </div>
-              <div className="items-center px-4 py-3">
-                <button
-                  onClick={() => setShowPaymentMethod(false)}
-                  className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700"
-                >
-                  Close
-                </button>
-              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowPaymentMethod(false);
+                  setError(null);
+                  setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+                }}
+                disabled={updatingPayment}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdatePaymentMethod}
+                disabled={updatingPayment || !paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cvv}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updatingPayment ? 'Updating...' : 'Update Payment'}
+              </button>
             </div>
           </div>
         </div>
