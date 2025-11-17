@@ -21,7 +21,7 @@ module.exports = (sequelize) => {
     },
     password_hash: {
       type: DataTypes.STRING(255),
-      allowNull: false
+      allowNull: true // Nullable for OAuth users and users who haven't set password yet
     },
     first_name: {
       type: DataTypes.STRING(100),
@@ -32,6 +32,26 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     company_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    company: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    email_verified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    oauth_provider: {
+      type: DataTypes.STRING(20),
+      allowNull: true // 'google', 'github', or NULL for email signup
+    },
+    oauth_id: {
       type: DataTypes.STRING(255),
       allowNull: true
     },

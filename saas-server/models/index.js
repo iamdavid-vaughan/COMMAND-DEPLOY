@@ -27,6 +27,8 @@ function initializeModels() {
   const AlertRule = require('./AlertRule')(sequelize);
   const AlertHistory = require('./AlertHistory')(sequelize);
   const DeploymentTemplate = require('./DeploymentTemplate')(sequelize);
+  const EmailVerificationToken = require('./EmailVerificationToken')(sequelize);
+  const PasswordResetToken = require('./PasswordResetToken')(sequelize);
 
   // Define relationships
   User.hasMany(Deployment, {
@@ -156,6 +158,26 @@ function initializeModels() {
     as: 'deployment'
   });
 
+  // Email verification relationships
+  User.hasMany(EmailVerificationToken, {
+    foreignKey: 'user_id',
+    as: 'emailVerificationTokens'
+  });
+  EmailVerificationToken.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  // Password reset relationships
+  User.hasMany(PasswordResetToken, {
+    foreignKey: 'user_id',
+    as: 'passwordResetTokens'
+  });
+  PasswordResetToken.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
   models = {
     User,
     Deployment,
@@ -171,6 +193,8 @@ function initializeModels() {
     AlertRule,
     AlertHistory,
     DeploymentTemplate,
+    EmailVerificationToken,
+    PasswordResetToken,
     sequelize
   };
 
