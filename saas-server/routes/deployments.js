@@ -216,7 +216,20 @@ router.get('/:id',
           startedAt: deployment.started_at,
           completedAt: deployment.completed_at,
           createdAt: deployment.created_at,
-          updatedAt: deployment.updated_at
+          updatedAt: deployment.updated_at,
+          // SSH Connection Info (extracted from configuration)
+          connectionInfo: deployment.configuration ? {
+            sshCommand: deployment.public_ip && deployment.configuration.ssh?.keyPath
+              ? `ssh -i ${deployment.configuration.ssh.keyPath} ${deployment.configuration.ssh?.username || 'ubuntu'}@${deployment.public_ip}`
+              : null,
+            sshKeyPath: deployment.configuration.ssh?.keyPath || null,
+            username: deployment.configuration.ssh?.username || 'ubuntu',
+            port: deployment.configuration.ssh?.port || 22,
+            securityGroupId: deployment.configuration.securityGroup?.id || null,
+            securityGroupName: deployment.configuration.securityGroup?.name || null,
+            s3BucketName: deployment.configuration.s3?.bucketName || null,
+            keyPairName: deployment.configuration.ssh?.keyPairName || null
+          } : null
         }
       });
 

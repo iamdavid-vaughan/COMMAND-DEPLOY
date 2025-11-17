@@ -13,7 +13,11 @@ import {
   RefreshCw,
   ArrowLeft,
   Play,
-  StopCircle
+  StopCircle,
+  Copy,
+  Key,
+  Shield,
+  Database
 } from 'lucide-react';
 import { deploymentsAPI } from '@/lib/api';
 
@@ -40,6 +44,16 @@ interface Deployment {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  connectionInfo?: {
+    sshCommand: string | null;
+    sshKeyPath: string | null;
+    username: string;
+    port: number;
+    securityGroupId: string | null;
+    securityGroupName: string | null;
+    s3BucketName: string | null;
+    keyPairName: string | null;
+  } | null;
 }
 
 export default function DeploymentDetailPage() {
@@ -302,6 +316,120 @@ export default function DeploymentDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* SSH Connection Info */}
+      {deployment.status === 'completed' && deployment.connectionInfo && deployment.publicIp && (
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Terminal className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Connection Information</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* SSH Command */}
+            {deployment.connectionInfo.sshCommand && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">SSH Command</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(deployment.connectionInfo!.sshCommand!);
+                      alert('SSH command copied to clipboard!');
+                    }}
+                    className="text-blue-600 hover:text-blue-700"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <code className="block text-xs font-mono text-gray-900 bg-gray-50 p-2 rounded break-all">
+                  {deployment.connectionInfo.sshCommand}
+                </code>
+              </div>
+            )}
+
+            {/* Public IP */}
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Public IP</span>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(deployment.publicIp!);
+                    alert('IP address copied to clipboard!');
+                  }}
+                  className="text-blue-600 hover:text-blue-700"
+                  title="Copy to clipboard"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+              <code className="block text-sm font-mono text-gray-900">
+                {deployment.publicIp}
+              </code>
+            </div>
+
+            {/* SSH Key Path */}
+            {deployment.connectionInfo.sshKeyPath && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Key className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">SSH Key Location</span>
+                </div>
+                <code className="block text-xs font-mono text-gray-900">
+                  {deployment.connectionInfo.sshKeyPath}
+                </code>
+              </div>
+            )}
+
+            {/* Username & Port */}
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Server className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-medium text-gray-700">Connection Details</span>
+              </div>
+              <div className="text-sm text-gray-900 space-y-1">
+                <div><span className="text-gray-600">Username:</span> <code className="font-mono">{deployment.connectionInfo.username}</code></div>
+                <div><span className="text-gray-600">Port:</span> <code className="font-mono">{deployment.connectionInfo.port}</code></div>
+              </div>
+            </div>
+
+            {/* Security Group */}
+            {deployment.connectionInfo.securityGroupId && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Security Group</span>
+                </div>
+                <div className="text-xs font-mono text-gray-900 space-y-1">
+                  <div>{deployment.connectionInfo.securityGroupId}</div>
+                  {deployment.connectionInfo.securityGroupName && (
+                    <div className="text-gray-600">{deployment.connectionInfo.securityGroupName}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* S3 Bucket */}
+            {deployment.connectionInfo.s3BucketName && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">S3 Bucket</span>
+                </div>
+                <code className="block text-xs font-mono text-gray-900">
+                  {deployment.connectionInfo.s3BucketName}
+                </code>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Deployment Logs */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
