@@ -1,285 +1,256 @@
-# Deployment Instructions - November 17, 2025
+# Deployment Instructions - Latest Changes
 
-## ✅ What Was Implemented
+## What Was Completed
 
-### 1. **Free Tier Pricing** 🆓
-**Status**: SQL script ready, needs to be run on database
+### 1. ✅ Deployment Deletion UI (DONE)
+**Files Modified:**
+- `dashboard/src/app/dashboard/deployments/[id]/page.tsx` - Detail page delete button
+- `dashboard/src/app/dashboard/deployments/page.tsx` - List page delete button
 
-**What it includes:**
-- No credit card required
-- 3 deployments per month
-- 1 instance maximum
-- 5GB storage
-- Community support only
-- "Powered by Focal Deploy" attribution
+**Features:**
+- Confirmation modals with AWS resource warnings
+- Prevents deletion of running deployments
+- Shows what will be deleted (EC2, SSH keypair, records)
+- Loading states with spinners
+- Auto-refresh after deletion
 
-**Action Required:**
+### 2. ✅ Landing Page Updated (DONE)
+**File Modified:**
+- `dashboard/src/app/landing-page.tsx`
+
+**Changes:**
+- Removed CLI-focused "How It Works" steps
+- Now emphasizes web dashboard workflow:
+  - Step 1: Sign Up & Connect AWS (7-day free trial)
+  - Step 2: Deploy Your App (web dashboard, no CLI needed)
+  - Step 3: Monitor & Manage (browser-based)
+- CLI mentioned at bottom as "power user" option
+- Build tested successfully
+
+### 3. ✅ 7-Day Trial System Planned (READY TO IMPLEMENT)
+**Files Created:**
+- `SEVEN_DAY_TRIAL_IMPLEMENTATION.md` - Complete implementation guide
+- `IMPLEMENT_SEVEN_DAY_TRIAL.sql` - Database migration script
+- `REMOVE_FREE_TIER.sql` - Script to remove free tier
+
+**System Overview:**
+- 7-day free trial with credit card required upfront
+- No charge during trial
+- Auto-charge after 7 days
+- Strict refund policy (email billing@focuswithfocal.com)
+- Refund admin dashboard for approval/denial
+- Email templates for trial lifecycle
+
+**Estimated Time:** 2-3 days to fully implement
+
+## Server Deployment Steps
+
+### Step 1: Fix Database Permissions (CRITICAL)
 ```bash
-cd ~/app/focal-deploy
-sudo -u postgres psql focal_deploy_saas < ADD_FREE_TIER.sql
-```
-
----
-
-### 2. **SSH Connection Info Display** 🔑
-**Status**: ✅ Complete (backend + frontend)
-
-**What was added:**
-- Backend: Enhanced `/api/deployments/:id` endpoint to return `connectionInfo` object
-- Frontend: Beautiful SSH Connection Information panel on deployment detail page
-
-**Shows:**
-- ✅ SSH command (copy-to-clipboard)
-- ✅ Public IP (copy-to-clipboard)
-- ✅ SSH key path
-- ✅ Username & port
-- ✅ Security group ID/name
-- ✅ S3 bucket name
-
-**Example Display:**
-```
-┌─────────────────────────────────────────────┐
-│ Connection Information                       │
-├─────────────────────────────────────────────┤
-│ SSH Command:   ssh -i ~/.ssh/focal.pem     │
-│                ubuntu@54.123.45.67           │
-│ Public IP:     54.123.45.67     [Copy]      │
-│ SSH Key:       ~/.ssh/focal-deploy-key.pem  │
-│ Username:      ubuntu                        │
-│ Port:          22                            │
-│ Security Group: sg-0a1b2c3d                 │
-│ S3 Bucket:     focal-deploy-abc123          │
-└─────────────────────────────────────────────┘
-```
-
----
-
-### 3. **Deployment Deletion** 🗑️
-**Status**: ✅ Already exists! (no changes needed)
-
-**Endpoint:** `DELETE /api/deployments/:id`
-
-**What it does:**
-- Terminates EC2 instance
-- Deletes SSH keypair
-- Updates deployment status to 'terminated'
-- Deletes deployment record from database
-- Background cleanup of AWS resources
-
-**Note:** Already calls `processTermination()` which uses AWS SDK to clean up resources.
-The `down.js` CLI command is NOT needed for web GUI - the API handles it.
-
----
-
-### 4. **Comprehensive TODO List** 📋
-**Status**: ✅ Complete
-
-**File:** `COMPREHENSIVE_TODO_LIST.md`
-
-**Contains:**
-- All 16 TODO items from codebase scan
-- Priority levels (Critical/High/Medium/Low)
-- Code locations with line numbers
-- Implementation estimates
-- Recommended order for MVP completion
-
----
-
-## 🚀 Deployment Steps (On Your Server)
-
-### Step 1: Pull Latest Code
-```bash
-cd ~/app/focal-deploy
-git fetch origin
-git checkout claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn
-git pull origin claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn
-```
-
-### Step 2: Add Free Tier to Database
-```bash
-# Run the SQL script
-sudo -u postgres psql focal_deploy_saas < ADD_FREE_TIER.sql
-
-# Expected output:
-# INSERT 0 1
-# UPDATE 1 (x5)
-# SELECT (shows all 6 tiers including new 'free' tier)
-```
-
-### Step 3: Restart Backend
-```bash
+# On your server
 cd ~/app/focal-deploy/saas-server
+
+# Grant permissions to pricing_tiers table
+sudo -u postgres psql focal_deploy_saas -c "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE pricing_tiers TO davidvaughan;"
+sudo -u postgres psql focal_deploy_saas -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO davidvaughan;"
+
+# Restart API
 pm2 restart saas-api
-
-# Check logs
-pm2 logs saas-api --lines 50
+pm2 logs saas-api --lines 20
 ```
 
-**This fixes:** The 500 error on `/api/admin/pricing` endpoint (models need reload)
-
-### Step 4: Rebuild Dashboard
+### Step 2: Remove Free Tier (IF YOU WANT TO)
 ```bash
+# Only run this if you want to remove the free tier
+sudo -u postgres psql focal_deploy_saas < REMOVE_FREE_TIER.sql
+pm2 restart saas-api
+```
+
+### Step 3: Deploy Dashboard Changes
+```bash
+# On your server
 cd ~/app/focal-deploy/dashboard
-npm install  # Install any new dependencies
+
+# Pull latest changes
+git pull origin claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn
+
+# Build and restart
 npm run build
-
-# Restart dashboard
 pm2 restart dashboard
+pm2 logs dashboard --lines 20
 ```
 
-### Step 5: Verify Everything Works
-```bash
-# Test 1: Check pricing endpoint
-curl https://api.focuswithfocal.io/api/pricing | jq
+### Step 4: Verify Everything Works
+1. Visit admin panel: https://focuswithfocal.com/dashboard/admin/pricing
+   - Should see 5 tiers (or 4 if you removed free tier)
+   - Should be able to edit prices, features
+2. Visit deployments page: https://focuswithfocal.com/dashboard/deployments
+   - Should see delete buttons on each deployment
+   - Click delete → should show confirmation modal
+3. Visit landing page: https://focuswithfocal.com
+   - Should see updated "How It Works" section (no CLI steps)
+   - Should mention 7-day free trial
 
-# Should show 6 tiers (free, starter, professional, max, enterprise, dfy)
+## What Already Works vs What's Missing
 
-# Test 2: Check admin pricing endpoint (must be logged in as super_admin)
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://api.focuswithfocal.io/api/admin/pricing | jq
+### ✅ What Already Works:
+1. **Pricing Tiers** - Database-driven, admin can modify
+2. **Deployments** - Create EC2 instances, deploy apps
+3. **SSH Connection Info** - Shows IP, SSH command, copy buttons
+4. **Deployment Deletion** - Terminates AWS resources properly
+5. **User Authentication** - JWT-based, secure
+6. **Billing Integration** - Authorize.Net connected
+7. **Admin Panel** - User management, pricing management
 
-# Should return 200 OK with all pricing tiers
+### ❌ What's Missing (Your Top Priorities):
 
-# Test 3: View deployment with SSH info
-# Visit: https://app.focuswithfocal.io/dashboard/deployments/YOUR_DEPLOYMENT_ID
-# Should see "Connection Information" panel with SSH command
-```
+#### 1. **Application Deployment Wizard** ⭐ HIGHEST PRIORITY
+**Why it's critical:** This is your core differentiator. Right now users get EC2 instances but have no easy way to deploy their apps.
+
+**What it should do:**
+- Auto-detect framework (Next.js, React, Node.js, WordPress, etc.)
+- GitHub repo connection → auto-deploy
+- ZIP file upload → detect → deploy
+- Pre-built templates (WordPress, Ghost, etc.)
+- One-click deploy for common stacks
+
+**Estimated Time:** 3-5 days
+
+**Impact:** HIGH - This is what makes Focal Deploy valuable vs raw EC2
+
+#### 2. **7-Day Trial System** ⭐ HIGH PRIORITY
+**Why it's important:** Convert signups to paying customers, reduce churn
+
+**What's needed:**
+- Credit card collection at signup
+- Auto-charge after 7 days
+- Refund request system (email to billing@)
+- Admin refund approval dashboard
+- Trial countdown banner in dashboard
+
+**Estimated Time:** 2-3 days
+
+**Impact:** HIGH - Revenue generation, customer acquisition
+
+#### 3. **Web SSH Terminal** ⭐ MEDIUM-HIGH PRIORITY
+**Why it's valuable:** Major "easy button" feature, no local SSH client needed
+
+**What it should do:**
+- Browser-based SSH using xterm.js
+- WebSocket connection to server
+- Direct SSH to deployments from dashboard
+- Copy/paste support, terminal themes
+
+**Estimated Time:** 2 days
+
+**Impact:** MEDIUM-HIGH - Great UX, competitive advantage
+
+#### 4. **API Key Management UI** ⭐ MEDIUM PRIORITY
+**What's missing:** Frontend interface (backend model exists)
+
+**Estimated Time:** 1 day
+
+**Impact:** MEDIUM - API users need this
+
+#### 5. **Usage Dashboard with Charts** ⭐ MEDIUM PRIORITY
+**What's missing:** Visualization (backend tracks usage)
+
+**Estimated Time:** 2 days
+
+**Impact:** MEDIUM - Users want to see what they're using
+
+## My Recommendation: Next Steps
+
+### Option A: Build Trial System First (Conservative)
+**Rationale:** Get revenue flowing before building complex features
+1. Implement 7-day trial (2-3 days)
+2. Test with real users, collect feedback
+3. Then build deployment wizard (3-5 days)
+4. Then web SSH (2 days)
+
+**Pros:** Revenue sooner, less risk
+**Cons:** Still no core product differentiator
+
+### Option B: Build Deployment Wizard First (Aggressive) ⭐ RECOMMENDED
+**Rationale:** Your product isn't valuable without easy app deployment
+1. Build application deployment wizard (3-5 days)
+2. Add web SSH terminal (2 days)
+3. Then implement trial system (2-3 days)
+
+**Pros:** Core product complete, actual value for users
+**Cons:** Revenue delayed by ~1 week
+
+### Option C: Build Both in Parallel (Requires Help)
+**Rationale:** Fastest to market
+- You implement trial system
+- I build deployment wizard
+- Merge both after 3-5 days
+
+**Pros:** Everything done in ~5 days
+**Cons:** More complex, requires coordination
+
+## About the Free Tier
+
+**You asked:** Should we have a free tier?
+
+**My Answer:** **NO, skip the free tier.** Here's why:
+
+1. **Real infrastructure costs** - Your product creates AWS resources (EC2, S3)
+2. **Free users cost you money** - Each free user is a net loss
+3. **Support burden** - Free users generate tickets but no revenue
+4. **You're targeting businesses** - Companies can pay $29/month
+5. **B2B doesn't need freemium** - Enterprise buyers want reliability, not free
+
+**Better alternatives:**
+- ✅ **7-day free trial** (credit card required) - What we planned
+- ✅ **$29/month minimum** - Filters for serious customers
+- ✅ **Money-back guarantee** - Less risky than true free tier
+- ❌ **Free tier with AWS costs** - Recipe for bankruptcy
+
+**If you already added free tier:** Run `REMOVE_FREE_TIER.sql` to remove it.
+
+## About NPM Package on Landing Page
+
+**You asked:** What about `npm install -g focal-deploy`?
+
+**My Answer:** The CLI exists and works fine. The landing page previously showcased it as the PRIMARY workflow, but now:
+
+✅ **Web dashboard is the hero** - Easy button for everyone
+✅ **CLI is mentioned** - Small note at bottom for power users
+✅ **Both work** - Users choose their preference
+
+This aligns with your philosophy: "Web GUI should be the focus, CLI for power users."
+
+## Questions for You
+
+Before I start the next big task, please confirm:
+
+### 1. **Which should I build first?**
+- [ ] Option A: 7-day trial system first (conservative, revenue sooner)
+- [ ] Option B: Application deployment wizard first (aggressive, core product) ⭐ My recommendation
+- [ ] Option C: Something else?
+
+### 2. **Free tier decision:**
+- [ ] Remove free tier (run REMOVE_FREE_TIER.sql on server)
+- [ ] Keep free tier (but this will cost you money)
+
+### 3. **Landing page changes:**
+- [ ] Changes look good (web GUI emphasized, CLI de-emphasized)
+- [ ] Make adjustments (let me know what)
+
+### 4. **Ready to deploy?**
+- [ ] Yes, deploy dashboard changes to production
+- [ ] No, wait for more features
 
 ---
 
-## 🎯 What This Achieves
+**Current Git Branch:** `claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn`
 
-### User Experience Improvements:
-1. **Free Tier Available** - New users can sign up without credit card
-2. **SSH Access Clear** - Users see exactly how to connect to their instances
-3. **Copy-Paste Ready** - SSH commands can be copied with one click
-4. **Resource Visibility** - Users see all AWS resources created (security groups, S3 buckets)
-5. **Deletion Works** - Users can delete deployments and clean up AWS resources
+**Files Ready to Deploy:**
+- Deployment deletion UI (detail + list pages)
+- Updated landing page (web GUI focused)
+- Trial system SQL scripts (not yet run on server)
+- Trial implementation plan (ready to code)
 
-### For MVP Launch:
-✅ Free trial option (freemium model)
-✅ Deployment deletion working
-✅ SSH connection info displayed
-✅ All changes documented
-
----
-
-## ⚠️ Known Issues & Next Steps
-
-### Critical Issues Remaining:
-1. **Application Deployment Wizard** - Core product gap!
-   - Users get EC2 instance but no help deploying apps
-   - Need: Auto-detect framework, one-click deploy
-   - Priority: 🔴 CRITICAL
-
-2. **Web SSH Terminal** - Major convenience feature
-   - Browser-based SSH using xterm.js + WebSocket
-   - Priority: 🟠 HIGH
-
-3. **API Key Management UI** - API unusable without it
-   - Generate/list/revoke API keys
-   - Priority: 🟠 HIGH
-
-4. **Usage Dashboard** - Users can't see what they're paying for
-   - Charts for deployments, API calls, resources
-   - Priority: 🟠 HIGH
-
-### See `COMPREHENSIVE_TODO_LIST.md` for full details.
-
----
-
-## 📊 Current Status Summary
-
-### ✅ Working:
-- User authentication & 2FA
-- Deployment creation & execution
-- Real-time deployment logs
-- **Deployment deletion** ✅ (already existed!)
-- **SSH connection info** ✅ (just added!)
-- Credential management (encrypted)
-- Admin panel
-- Pricing tier management (now with free tier!)
-- Billing API integration
-
-### ❌ Missing for MVP:
-- Application deployment wizard (CRITICAL - this is the product!)
-- Web SSH terminal
-- API key management UI
-- Usage dashboard with charts
-
-### 📁 Files Changed (Latest Commits):
-```
-Commit 1df66d3: feat: Add SSH connection info display and free tier SQL
-├── ADD_FREE_TIER.sql (new)
-├── dashboard/src/app/dashboard/deployments/[id]/page.tsx
-└── saas-server/routes/deployments.js
-
-Commit 160c089: docs: Add comprehensive TODO list
-└── COMPREHENSIVE_TODO_LIST.md (new)
-
-Commit 9b68ab0: fix: Update billing payment form
-└── dashboard/src/app/dashboard/billing/page.tsx
-
-Commit 061208b: feat: Add dynamic pricing tier management system
-├── saas-server/models/PricingTier.js (new)
-├── saas-server/migrations/... (new)
-├── dashboard/src/app/dashboard/admin/pricing/page.tsx (new)
-└── + many others
-```
-
----
-
-## 🎁 Bonus: What Already Worked (But You Didn't Know)
-
-### Deployment Deletion Already Exists!
-- Route: `DELETE /api/deployments/:id`
-- Location: `saas-server/routes/deployments.js:365`
-- Calls: `processTermination(deploymentId)`
-- Terminates: EC2 instance, SSH keypair
-- Updates: Deployment status to 'terminated'
-
-**You can already delete deployments from the API!**
-
-Just need to add a "Delete" button in the frontend (dashboard).
-
----
-
-## 💡 Pro Tips
-
-1. **Free Tier as Default**
-   - When users register, automatically assign `licenseTier: 'free'`
-   - Let them upgrade when they hit limits
-   - This is the Vercel/Netlify model
-
-2. **SSH Key Download**
-   - Consider adding a "Download SSH Key" button
-   - Store SSH private key in secure location
-   - Or email it to user on deployment completion
-
-3. **Deployment Templates**
-   - Pre-built configs for: WordPress, Ghost, Next.js, etc.
-   - One-click deploy from template
-   - Major differentiator from raw EC2
-
-4. **One-Click App Deploy**
-   - This is THE feature that makes Focal Deploy valuable
-   - Without it, users just have raw EC2 instances
-   - Priority: Build this next!
-
----
-
-## 📞 Need Help?
-
-If you see errors after deployment:
-1. Check PM2 logs: `pm2 logs saas-api`
-2. Check database: `sudo -u postgres psql focal_deploy_saas`
-3. Verify free tier was added: `SELECT * FROM pricing_tiers WHERE id='free';`
-4. Test endpoints manually with curl
-
-**All changes are on branch:** `claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn`
-
----
-
-**Last Updated:** November 17, 2025
-**Branch:** `claude/fix-migration-schema-01FW4oMzWsjZxp2wypAiGcJn`
-**Commits:** 160c089, 1df66d3
+**Time investment so far:** ~2 hours of implementation + planning
+**Recommended next investment:** 3-5 days on deployment wizard (highest ROI)
