@@ -64,21 +64,21 @@ export default function LandingPage() {
   const steps = [
     {
       number: '01',
-      title: 'Install the CLI',
-      description: 'Simple npm install to get started in seconds.',
-      code: 'npm install -g focal-deploy',
+      title: 'Sign Up & Connect AWS',
+      description: '7-day free trial. Add your AWS credentials securely in our dashboard.',
+      code: null,
     },
     {
       number: '02',
-      title: 'Configure Your Project',
-      description: 'Initialize your project with a single command.',
-      code: 'focal-deploy init',
+      title: 'Deploy Your App',
+      description: 'Use our web dashboard to deploy - no CLI needed. Just point and click.',
+      code: null,
     },
     {
       number: '03',
-      title: 'Deploy',
-      description: 'Push your application live with one command.',
-      code: 'focal-deploy deploy',
+      title: 'Monitor & Manage',
+      description: 'Track deployments, SSH into servers, and manage everything from your browser.',
+      code: null,
     },
   ];
 
@@ -253,9 +253,11 @@ export default function LandingPage() {
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">{step.title}</h3>
                   <p className="text-gray-600 mb-4">{step.description}</p>
-                  <div className="bg-gray-900 rounded-lg p-4 font-mono text-green-400 text-sm">
-                    $ {step.code}
-                  </div>
+                  {step.code && (
+                    <div className="bg-gray-900 rounded-lg p-4 font-mono text-green-400 text-sm">
+                      $ {step.code}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -269,6 +271,10 @@ export default function LandingPage() {
               Start Deploying Now
               <ArrowRight className="ml-2 w-5 h-5" />
             </Link>
+            <p className="mt-6 text-sm text-gray-500">
+              <Terminal className="inline-block w-4 h-4 mr-1" />
+              Power users: CLI available with <code className="px-2 py-1 bg-gray-100 rounded">npm install -g focal-deploy</code>
+            </p>
           </div>
         </div>
       </section>
