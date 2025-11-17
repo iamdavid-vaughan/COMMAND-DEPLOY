@@ -5,8 +5,20 @@
 
 const postmark = require('postmark');
 
-// Initialize Postmark client
-const client = new postmark.ServerClient(process.env.POSTMARK_API_TOKEN);
+// Initialize Postmark client lazily
+let client = null;
+
+function getPostmarkClient() {
+  if (!client) {
+    // Try both POSTMARK_SERVER_TOKEN (from .env.example) and POSTMARK_API_TOKEN
+    const token = process.env.POSTMARK_SERVER_TOKEN || process.env.POSTMARK_API_TOKEN;
+    if (!token) {
+      throw new Error('POSTMARK_SERVER_TOKEN environment variable is not set. Please add it to your .env file.');
+    }
+    client = new postmark.ServerClient(token);
+  }
+  return client;
+}
 
 /**
  * Send email verification email
@@ -18,7 +30,7 @@ async function sendVerificationEmail(email, token, name = '') {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
 
   try {
-    const result = await client.sendEmail({
+    const result = await getPostmarkClient().sendEmail({
       From: process.env.POSTMARK_FROM_EMAIL || 'noreply@focuswithfocal.com',
       To: email,
       Subject: 'Verify Your Email - Focal Deploy',
@@ -104,7 +116,7 @@ async function sendPasswordResetEmail(email, token, name = '') {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
   try {
-    const result = await client.sendEmail({
+    const result = await getPostmarkClient().sendEmail({
       From: process.env.POSTMARK_FROM_EMAIL || 'noreply@focuswithfocal.com',
       To: email,
       Subject: 'Reset Your Password - Focal Deploy',
@@ -192,7 +204,7 @@ async function sendWelcomeEmail(email, name = '') {
   const dashboardUrl = `${process.env.FRONTEND_URL}/dashboard`;
 
   try {
-    const result = await client.sendEmail({
+    const result = await getPostmarkClient().sendEmail({
       From: process.env.POSTMARK_FROM_EMAIL || 'noreply@focuswithfocal.com',
       To: email,
       Subject: 'Welcome to Focal Deploy!',
