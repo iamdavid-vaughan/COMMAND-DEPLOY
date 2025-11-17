@@ -65,8 +65,10 @@ export default function BillingPage() {
   const [paymentInfo, setPaymentInfo] = useState({
     cardNumber: '',
     expirationDate: '',
-    cvv: '',
-    zipCode: '',
+    cardCode: '',
+    firstName: '',
+    lastName: '',
+    zip: '',
   });
   const [updatingPayment, setUpdatingPayment] = useState(false);
 
@@ -138,7 +140,7 @@ export default function BillingPage() {
   };
 
   const handleUpdatePaymentMethod = async () => {
-    if (!paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cvv) {
+    if (!paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cardCode || !paymentInfo.firstName || !paymentInfo.lastName || !paymentInfo.zip) {
       setError('Please fill in all payment information');
       return;
     }
@@ -150,13 +152,15 @@ export default function BillingPage() {
         paymentProfile: {
           cardNumber: paymentInfo.cardNumber,
           expirationDate: paymentInfo.expirationDate,
-          cvv: paymentInfo.cvv,
-          zipCode: paymentInfo.zipCode,
+          cardCode: paymentInfo.cardCode,
+          firstName: paymentInfo.firstName,
+          lastName: paymentInfo.lastName,
+          zip: paymentInfo.zip,
         },
       });
       alert('Payment method updated successfully');
       setShowPaymentMethod(false);
-      setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+      setPaymentInfo({ cardNumber: '', expirationDate: '', cardCode: '', firstName: '', lastName: '', zip: '' });
       fetchBillingData();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update payment method');
@@ -556,7 +560,7 @@ export default function BillingPage() {
                 onClick={() => {
                   setShowPaymentMethod(false);
                   setError(null);
-                  setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+                  setPaymentInfo({ cardNumber: '', expirationDate: '', cardCode: '', firstName: '', lastName: '', zip: '' });
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -571,6 +575,40 @@ export default function BillingPage() {
             )}
 
             <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="John"
+                    value={paymentInfo.firstName}
+                    onChange={(e) =>
+                      setPaymentInfo({ ...paymentInfo, firstName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={updatingPayment}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Doe"
+                    value={paymentInfo.lastName}
+                    onChange={(e) =>
+                      setPaymentInfo({ ...paymentInfo, lastName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={updatingPayment}
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Card Number *
@@ -590,7 +628,7 @@ export default function BillingPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Expiration Date *
@@ -620,32 +658,32 @@ export default function BillingPage() {
                     type="text"
                     placeholder="123"
                     maxLength={4}
-                    value={paymentInfo.cvv}
+                    value={paymentInfo.cardCode}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, '');
-                      setPaymentInfo({ ...paymentInfo, cvv: value });
+                      setPaymentInfo({ ...paymentInfo, cardCode: value });
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     disabled={updatingPayment}
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ZIP Code
-                </label>
-                <input
-                  type="text"
-                  placeholder="12345"
-                  maxLength={10}
-                  value={paymentInfo.zipCode}
-                  onChange={(e) =>
-                    setPaymentInfo({ ...paymentInfo, zipCode: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={updatingPayment}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ZIP Code *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="12345"
+                    maxLength={10}
+                    value={paymentInfo.zip}
+                    onChange={(e) =>
+                      setPaymentInfo({ ...paymentInfo, zip: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={updatingPayment}
+                  />
+                </div>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
@@ -661,7 +699,7 @@ export default function BillingPage() {
                 onClick={() => {
                   setShowPaymentMethod(false);
                   setError(null);
-                  setPaymentInfo({ cardNumber: '', expirationDate: '', cvv: '', zipCode: '' });
+                  setPaymentInfo({ cardNumber: '', expirationDate: '', cardCode: '', firstName: '', lastName: '', zip: '' });
                 }}
                 disabled={updatingPayment}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
@@ -670,7 +708,7 @@ export default function BillingPage() {
               </button>
               <button
                 onClick={handleUpdatePaymentMethod}
-                disabled={updatingPayment || !paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cvv}
+                disabled={updatingPayment || !paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cardCode || !paymentInfo.firstName || !paymentInfo.lastName || !paymentInfo.zip}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {updatingPayment ? 'Updating...' : 'Update Payment'}
