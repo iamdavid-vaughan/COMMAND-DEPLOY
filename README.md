@@ -84,6 +84,8 @@ Focal Deploy v2.0 automates the entire AWS deployment process with a comprehensi
 - **📊 Security Dashboard** - Real-time security status with health scoring (0-100)
 - **🔍 Security Auditing** - Comprehensive vulnerability detection and recommendations
 - **🔄 Automatic Updates** - Unattended security patch installation
+- **📋 Audit Logging** - Track all sensitive actions (login, deployments, credential access)
+- **🔐 Password Breach Checking** - Integration with Have I Been Pwned API
 
 ### Safety Features
 - 🧪 **Dry Run Mode** - Test deployments without creating resources
@@ -303,6 +305,12 @@ focal-deploy recover my-awesome-app
 | `ssh-key-setup` | Generate and deploy SSH keys | `focal-deploy ssh-key-setup` |
 | `firewall-status` | Check UFW firewall status and rules | `focal-deploy firewall-status` |
 | `fail2ban-status` | Monitor Fail2ban intrusion prevention | `focal-deploy fail2ban-status` |
+| `audit-logs` | View security audit logs with filtering | `focal-deploy audit-logs --failed` |
+| `audit-stats` | Display audit log statistics | `focal-deploy audit-stats` |
+| `audit-interactive` | Interactive audit log viewer | `focal-deploy audit-interactive` |
+| `password-check` | Check password for breaches | `focal-deploy password-check` |
+| `password-generate` | Generate secure random password | `focal-deploy password-generate` |
+| `password-security` | Interactive password security tool | `focal-deploy password-security` |
 
 ### Monitoring Commands
 

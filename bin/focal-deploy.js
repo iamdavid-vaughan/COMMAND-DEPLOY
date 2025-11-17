@@ -1,5 +1,23 @@
 #!/usr/bin/env node
 
+/**
+ * Copyright (c) 2025 Focal Deploy. All Rights Reserved.
+ *
+ * This file is part of Focal Deploy, a proprietary deployment automation platform.
+ * Unauthorized copying, modification, distribution, or use of this software,
+ * via any medium, is strictly prohibited without express written permission.
+ *
+ * Licensed under the Focal Deploy Proprietary License.
+ * See LICENSE file in the project root for license information.
+ *
+ * For licensing inquiries: licensing@focal-deploy.com
+ * For support: support@focal-deploy.com
+ *
+ * @author Focal Deploy Team
+ * @copyright 2025 Focal Deploy
+ * @license Proprietary
+ */
+
 const { Command } = require('commander');
 const { Logger } = require('../lib/utils/logger');
 const { ErrorHandler } = require('../lib/utils/errors');
@@ -20,10 +38,16 @@ const { EnhancedStatusCommand } = require('../lib/commands/enhanced-status');
 const { monitorSetupCommand, monitorStatusCommand, monitorLogsCommand } = require('../lib/commands/monitor');
 const { domainConfigureCommand, domainVerifyCommand, domainStatusCommand, domainSubdomainCommand, domainWaitCommand } = require('../lib/commands/domain');
 const { dnsUpdate, dnsStatus, dnsSync, dnsVerify } = require('../lib/commands/dns');
+const { updateWizardDNS } = require('../lib/commands/dns-fix');
 const { securitySetup, securityStatus, securityAudit, sshKeySetup, securityReset } = require('../lib/commands/security');
 const { firewallStatus, fail2banStatus } = require('../lib/commands/firewall');
 const { EmergencyRecoveryCommand } = require('../lib/commands/emergency-recovery');
+const { ClosePort22Command } = require('../lib/commands/close-port-22');
 const { ResumeCommand } = require('../lib/commands/resume');
+const { activateLicense, deactivateLicense, licenseInfo } = require('../lib/commands/license');
+const { LicenseManager } = require('../lib/utils/license-manager');
+const AuditCommands = require('../lib/commands/audit');
+const PasswordCheckCommands = require('../lib/commands/password-check');
 
 const program = new Command();
 
@@ -65,6 +89,10 @@ program
   .option('--git-email <email>', 'Git user email for commits')
   .action(async (projectName, options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const newCommand = new NewCommand();
       await newCommand.execute(projectName, options);
     } catch (error) {
@@ -99,6 +127,10 @@ program
   .option('--dry-run', 'Simulate push and deployment without making changes')
   .action(async (options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const pushDeployCommand = new PushDeployCommand();
       await pushDeployCommand.execute(options);
     } catch (error) {
@@ -114,6 +146,10 @@ program
   .option('--dry-run', 'Simulate deployment without creating AWS resources')
   .action(async (options) => {
     try {
+      // Check license before running
+      const licenseManager = new LicenseManager();
+      await licenseManager.requireLicense();
+
       const upCommand = new UpCommand();
       await upCommand.execute(options);
     } catch (error) {
@@ -458,6 +494,20 @@ program
     }
   });
 
+program
+  .command('dns-fix')
+  .description('Update DNS records for wizard-based deployments (works with .focal-deploy/config.json)')
+  .option('--dry-run', 'Simulate DNS updates without making changes')
+  .option('--project-path <path>', 'Path to deployment directory (default: current directory)')
+  .action(async (options) => {
+    try {
+      await updateWizardDNS(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
 // Security commands
 program
   .command('security-setup')
@@ -540,6 +590,140 @@ program
     }
   });
 
+// Audit log commands
+program
+  .command('audit-logs')
+  .description('📋 View security audit logs with filtering options')
+  .option('--action <action>', 'Filter by action type')
+  .option('--category <category>', 'Filter by category (authentication, deployment, security, etc.)')
+  .option('--severity <severity>', 'Filter by severity (info, warning, critical)')
+  .option('--user <user>', 'Filter by user')
+  .option('--failed', 'Show only failed actions')
+  .option('--since <date>', 'Show logs since date (e.g., "7d", "24h", "2024-01-01")')
+  .option('--until <date>', 'Show logs until date')
+  .option('--limit <number>', 'Limit number of results', '50')
+  .option('--format <format>', 'Output format (table, json, csv)', 'table')
+  .action(async (options) => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.viewLogs(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-stats')
+  .description('📊 Display audit log statistics and analytics')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.showStatistics();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-interactive')
+  .description('🔍 Interactive audit log viewer with multiple filtering options')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.interactiveView();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-export')
+  .description('💾 Export audit logs to file')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.exportLogs();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-clear')
+  .description('🗑️  Clear all audit logs (creates backup first)')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.clearLogs();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// Password breach checking commands
+program
+  .command('password-check')
+  .description('🔐 Check if password has been compromised in data breaches')
+  .argument('[password]', 'Password to check (will prompt if not provided)')
+  .action(async (password) => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      if (password) {
+        await passwordCheckCommands.checkPasswordDirect(password);
+      } else {
+        await passwordCheckCommands.checkPassword();
+      }
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-generate')
+  .description('🔑 Generate a secure random password')
+  .action(async () => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.generatePassword();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-batch-check')
+  .description('📋 Check multiple passwords from a file')
+  .argument('<file>', 'Path to file containing passwords (one per line)')
+  .action(async (file) => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.batchCheck(file);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-security')
+  .description('🛡️  Interactive password security tool')
+  .action(async () => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.interactiveMenu();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
 program
   .command('emergency-recovery')
   .description('Trigger emergency recovery via EC2 User Data (requires instance restart)')
@@ -568,6 +752,20 @@ program
     }
   });
 
+// Close port 22 command
+program
+  .command('close-port-22')
+  .description('🔒 Remove port 22 from security group after SSH hardening (security fix)')
+  .action(async () => {
+    try {
+      const closePort22Command = new ClosePort22Command();
+      await closePort22Command.execute();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
 // Resume command
 program
   .command('resume')
@@ -576,6 +774,43 @@ program
     try {
       const resumeCommand = new ResumeCommand();
       await resumeCommand.execute(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// License commands
+program
+  .command('activate')
+  .description('🔐 Activate your Focal Deploy license')
+  .action(async () => {
+    try {
+      await activateLicense();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('deactivate')
+  .description('🔓 Deactivate license on this machine')
+  .action(async () => {
+    try {
+      await deactivateLicense();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('license')
+  .description('📄 Show license information')
+  .action(async () => {
+    try {
+      await licenseInfo();
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
@@ -663,6 +898,140 @@ program
       const { CleanupCommand } = require('../lib/commands/cleanup');
       const cleanupCommand = new CleanupCommand();
       await cleanupCommand.execute(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// Audit log commands
+program
+  .command('audit-logs')
+  .description('📋 View security audit logs with filtering options')
+  .option('--action <action>', 'Filter by action type')
+  .option('--category <category>', 'Filter by category (authentication, deployment, security, etc.)')
+  .option('--severity <severity>', 'Filter by severity (info, warning, critical)')
+  .option('--user <user>', 'Filter by user')
+  .option('--failed', 'Show only failed actions')
+  .option('--since <date>', 'Show logs since date (e.g., "7d", "24h", "2024-01-01")')
+  .option('--until <date>', 'Show logs until date')
+  .option('--limit <number>', 'Limit number of results', '50')
+  .option('--format <format>', 'Output format (table, json, csv)', 'table')
+  .action(async (options) => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.viewLogs(options);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-stats')
+  .description('📊 Display audit log statistics and analytics')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.showStatistics();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-interactive')
+  .description('🔍 Interactive audit log viewer with multiple filtering options')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.interactiveView();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-export')
+  .description('💾 Export audit logs to file')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.exportLogs();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('audit-clear')
+  .description('🗑️  Clear all audit logs (creates backup first)')
+  .action(async () => {
+    try {
+      const auditCommands = new AuditCommands();
+      await auditCommands.clearLogs();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+// Password breach checking commands
+program
+  .command('password-check')
+  .description('🔐 Check if password has been compromised in data breaches')
+  .argument('[password]', 'Password to check (will prompt if not provided)')
+  .action(async (password) => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      if (password) {
+        await passwordCheckCommands.checkPasswordDirect(password);
+      } else {
+        await passwordCheckCommands.checkPassword();
+      }
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-generate')
+  .description('🔑 Generate a secure random password')
+  .action(async () => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.generatePassword();
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-batch-check')
+  .description('📋 Check multiple passwords from a file')
+  .argument('<file>', 'Path to file containing passwords (one per line)')
+  .action(async (file) => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.batchCheck(file);
+    } catch (error) {
+      ErrorHandler.handle(error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('password-security')
+  .description('🛡️  Interactive password security tool')
+  .action(async () => {
+    try {
+      const passwordCheckCommands = new PasswordCheckCommands();
+      await passwordCheckCommands.interactiveMenu();
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);

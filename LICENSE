@@ -1,0 +1,110 @@
+FOCAL DEPLOY PROPRIETARY LICENSE
+
+Copyright (c) 2025 DNS Publishing, LLC. All Rights Reserved.
+
+IMPORTANT: READ CAREFULLY BEFORE USING THIS SOFTWARE
+
+This software and associated documentation files (the "Software") are the
+proprietary property of DNS Publishing, LLC ("DNS Publishing", "Focal Deploy")
+and are protected by copyright laws and international treaty provisions.
+
+GRANT OF LICENSE
+
+Subject to the terms of this License and your active subscription to Focal Deploy
+services, Focal Deploy grants you a limited, non-exclusive, non-transferable,
+revocable license to:
+
+1. Use the Software solely for your internal business purposes
+2. Use the Software only in accordance with your purchased license tier
+3. Access the Software through the official Focal Deploy CLI and API
+
+RESTRICTIONS
+
+You may NOT:
+
+1. Copy, modify, or create derivative works of the Software
+2. Reverse engineer, decompile, or disassemble the Software
+3. Remove or alter any copyright, trademark, or proprietary notices
+4. Rent, lease, lend, sell, redistribute, or sublicense the Software
+5. Use the Software to provide services to third parties (SaaS) without
+   an Enterprise license
+6. Share your account credentials or API keys with others
+7. Exceed the usage limits of your licensed tier
+8. Use the Software for any unlawful purpose
+
+LICENSE TIERS
+
+BASIC TIER
+- Limited to 3 deployments per month
+- Community support only
+- Single user account
+
+PROFESSIONAL TIER
+- Unlimited deployments
+- Email support (48-hour response)
+- Up to 5 user accounts
+- Advanced security features
+
+ENTERPRISE TIER
+- Unlimited deployments
+- Priority support (4-hour response)
+- Unlimited user accounts
+- Custom integrations
+- On-premises deployment option
+- White-label capabilities
+
+TERMINATION
+
+This License is effective until terminated. Your rights under this License will
+terminate automatically without notice if you fail to comply with any term herein.
+Upon termination, you must cease all use of the Software and destroy all copies.
+
+DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL DNS PUBLISHING, LLC BE LIABLE FOR
+ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL DNS PUBLISHING, LLC'S TOTAL LIABILITY EXCEED THE AMOUNT PAID BY
+YOU FOR THE SOFTWARE DURING THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
+
+DATA AND PRIVACY
+
+By using this Software, you acknowledge that:
+1. Focal Deploy collects usage data for analytics and billing purposes
+2. Your AWS credentials are encrypted using AES-256-GCM encryption
+3. Credentials are stored securely and never shared with third parties
+4. You retain ownership of all deployed applications and data
+
+UPDATES AND SUPPORT
+
+Updates and bug fixes are provided at Focal Deploy's discretion. Support is
+provided according to your license tier. Additional support may be purchased
+separately.
+
+GOVERNING LAW
+
+This License shall be governed by the laws of [Your Jurisdiction], without
+regard to conflict of law provisions.
+
+ENTIRE AGREEMENT
+
+This License constitutes the entire agreement between you and Focal Deploy
+regarding the Software and supersedes all prior agreements.
+
+CONTACT
+
+For licensing inquiries: licensing@focuswithfocal.com
+For support: support@focuswithfocal.com
+Website: https://focuswithfocal.com
+
+---
+
+Focal Deploy™ is a trademark of DNS Publishing, LLC.
+All other trademarks are the property of their respective owners.
+
+Last Updated: November 11, 2025
+Version: 1.0

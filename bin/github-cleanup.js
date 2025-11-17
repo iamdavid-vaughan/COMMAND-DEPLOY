@@ -1,5 +1,23 @@
 #!/usr/bin/env node
 
+/**
+ * Copyright (c) 2025 Focal Deploy. All Rights Reserved.
+ *
+ * This file is part of Focal Deploy, a proprietary deployment automation platform.
+ * Unauthorized copying, modification, distribution, or use of this software,
+ * via any medium, is strictly prohibited without express written permission.
+ *
+ * Licensed under the Focal Deploy Proprietary License.
+ * See LICENSE file in the project root for license information.
+ *
+ * For licensing inquiries: licensing@focal-deploy.com
+ * For support: support@focal-deploy.com
+ *
+ * @author Focal Deploy Team
+ * @copyright 2025 Focal Deploy
+ * @license Proprietary
+ */
+
 const { GitHubCleanupService } = require('../lib/utils/github-cleanup');
 const inquirer = require('inquirer');
 const chalk = require('chalk');
