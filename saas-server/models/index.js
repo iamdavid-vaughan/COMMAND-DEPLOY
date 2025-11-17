@@ -17,6 +17,7 @@ function initializeModels() {
   const Deployment = require('./Deployment')(sequelize);
   const DeploymentLog = require('./DeploymentLog')(sequelize);
   const EncryptedCredential = require('./EncryptedCredential')(sequelize);
+  const GCPCredential = require('./GCPCredential')(sequelize);
   const UsageTracking = require('./UsageTracking')(sequelize);
   const ApiKey = require('./ApiKey')(sequelize);
   const Subscription = require('./Subscription')(sequelize);
@@ -38,6 +39,15 @@ function initializeModels() {
     as: 'credentials'
   });
   EncryptedCredential.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  User.hasMany(GCPCredential, {
+    foreignKey: 'user_id',
+    as: 'gcpCredentials'
+  });
+  GCPCredential.belongsTo(User, {
     foreignKey: 'user_id',
     as: 'user'
   });
@@ -101,6 +111,7 @@ function initializeModels() {
     Deployment,
     DeploymentLog,
     EncryptedCredential,
+    GCPCredential,
     UsageTracking,
     ApiKey,
     Subscription,
