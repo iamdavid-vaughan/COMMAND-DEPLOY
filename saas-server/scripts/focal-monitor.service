@@ -1,0 +1,26 @@
+[Unit]
+Description=Focal Deploy Monitoring Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/local/bin
+ExecStart=/usr/local/bin/focal-monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (set during installation)
+Environment="FOCAL_API_URL=https://api.focuswithfocal.com"
+Environment="FOCAL_DEPLOYMENT_ID=__DEPLOYMENT_ID__"
+Environment="FOCAL_MONITOR_TOKEN=__MONITOR_TOKEN__"
+Environment="FOCAL_MONITOR_INTERVAL=30"
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

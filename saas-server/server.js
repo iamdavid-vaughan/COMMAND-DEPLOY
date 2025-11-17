@@ -34,6 +34,7 @@ const adminRoutes = require('./routes/admin');
 const deploymentRoutes = require('./routes/deployments');
 const credentialsRoutes = require('./routes/credentials');
 const gcpCredentialsRoutes = require('./routes/gcpCredentials');
+const monitoringRoutes = require('./routes/monitoring');
 const usageRoutes = require('./routes/usage');
 const billingRoutes = require('./routes/billing');
 const pricingRoutes = require('./routes/pricing');
@@ -166,6 +167,7 @@ app.use('/api/admin', authenticate, adminRoutes);
 app.use('/api/deployments', authenticate, deploymentRoutes);
 app.use('/api/credentials', authenticate, credentialsRoutes);
 app.use('/api/gcp-credentials', authenticate, gcpCredentialsRoutes);
+app.use('/api/monitoring', monitoringRoutes); // Public endpoint for agents + authenticated for users
 app.use('/api/usage', authenticate, usageRoutes);
 app.use('/api/billing', authenticate, billingRoutes);
 app.use('/api/audit', authenticate, auditRoutes);

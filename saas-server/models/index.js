@@ -23,6 +23,10 @@ function initializeModels() {
   const Subscription = require('./Subscription')(sequelize);
   const Invoice = require('./Invoice')(sequelize);
   const PricingTier = require('./PricingTier')(sequelize);
+  const ServerMetric = require('./ServerMetric')(sequelize);
+  const AlertRule = require('./AlertRule')(sequelize);
+  const AlertHistory = require('./AlertHistory')(sequelize);
+  const DeploymentTemplate = require('./DeploymentTemplate')(sequelize);
 
   // Define relationships
   User.hasMany(Deployment, {
@@ -106,6 +110,52 @@ function initializeModels() {
     as: 'user'
   });
 
+  // Monitoring relationships
+  Deployment.hasMany(ServerMetric, {
+    foreignKey: 'deployment_id',
+    as: 'metrics'
+  });
+  ServerMetric.belongsTo(Deployment, {
+    foreignKey: 'deployment_id',
+    as: 'deployment'
+  });
+
+  User.hasMany(AlertRule, {
+    foreignKey: 'user_id',
+    as: 'alertRules'
+  });
+  AlertRule.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+  });
+
+  Deployment.hasMany(AlertRule, {
+    foreignKey: 'deployment_id',
+    as: 'alertRules'
+  });
+  AlertRule.belongsTo(Deployment, {
+    foreignKey: 'deployment_id',
+    as: 'deployment'
+  });
+
+  AlertRule.hasMany(AlertHistory, {
+    foreignKey: 'alert_rule_id',
+    as: 'history'
+  });
+  AlertHistory.belongsTo(AlertRule, {
+    foreignKey: 'alert_rule_id',
+    as: 'rule'
+  });
+
+  Deployment.hasMany(AlertHistory, {
+    foreignKey: 'deployment_id',
+    as: 'alertHistory'
+  });
+  AlertHistory.belongsTo(Deployment, {
+    foreignKey: 'deployment_id',
+    as: 'deployment'
+  });
+
   models = {
     User,
     Deployment,
@@ -117,6 +167,10 @@ function initializeModels() {
     Subscription,
     Invoice,
     PricingTier,
+    ServerMetric,
+    AlertRule,
+    AlertHistory,
+    DeploymentTemplate,
     sequelize
   };
 
