@@ -8,12 +8,14 @@ const { getModels } = require('../models');
 const crypto = require('crypto');
 
 // Storage quotas per pricing tier (in GB)
+// Updated to match pricing_tiers table in database
 const STORAGE_QUOTAS = {
-  free: 1,        // 1 GB
-  starter: 5,     // 5 GB
-  pro: 50,        // 50 GB
-  business: 200,  // 200 GB
-  enterprise: 1000 // 1 TB
+  free: 1,          // 1 GB - trial users
+  starter: 10,      // 10 GB - matches database
+  professional: 50, // 50 GB - matches database
+  max: 200,         // 200 GB - matches database
+  enterprise: 1000, // 1 TB
+  dfy: 100          // 100 GB - Done For You plan
 };
 
 // File retention periods (in days)
