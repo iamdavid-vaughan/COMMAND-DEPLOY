@@ -76,6 +76,17 @@ router.post('/register',
         status: 'active'
       });
 
+      // Initialize user storage (async, non-blocking)
+      const storageManager = require('../services/storageManager');
+      setImmediate(async () => {
+        try {
+          await storageManager.initializeUserStorage(user.id, user.license_tier);
+          console.log(`✅ [AUTH] Storage initialized for user ${user.id}`);
+        } catch (error) {
+          console.error(`❌ [AUTH] Failed to initialize storage for user ${user.id}:`, error);
+        }
+      });
+
       // Generate JWT token
       const token = generateToken({
         id: user.id,

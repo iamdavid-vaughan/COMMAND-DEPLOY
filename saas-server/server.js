@@ -44,6 +44,7 @@ const auditRoutes = require('./routes/audit');
 const passwordSecurityRoutes = require('./routes/password-security');
 const apiKeysRoutes = require('./routes/api-keys');
 const adminSettingsRoutes = require('./routes/admin-settings');
+const storageRoutes = require('./routes/storage');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error-handler');
@@ -176,6 +177,7 @@ app.use('/api/audit', authenticate, auditRoutes);
 app.use('/api/password-security', authenticate, passwordSecurityRoutes);
 app.use('/api/api-keys', authenticate, apiKeysRoutes);
 app.use('/api/admin/settings', authenticate, adminSettingsRoutes);
+app.use('/api/storage', authenticate, storageRoutes);
 
 /**
  * Root Route

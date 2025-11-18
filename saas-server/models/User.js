@@ -117,6 +117,33 @@ module.exports = (sequelize) => {
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: []
+    },
+    // Storage Management
+    storage_quota_gb: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 5.0 // Default 5GB for starter tier
+    },
+    storage_used_gb: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0.0
+    },
+    storage_path: {
+      type: DataTypes.STRING(500),
+      allowNull: true
+    },
+    storage_initialized_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    storage_last_calculated_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    storage_warning_sent_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'users',
