@@ -12,7 +12,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { sequelize, getModels } = require('../models');
+const { sequelize, initializeModels, getModels } = require('../models');
 
 // Storage quotas per tier (must match storageManager.js)
 const STORAGE_QUOTAS = {
@@ -27,6 +27,9 @@ const STORAGE_QUOTAS = {
 async function updateUserQuotas() {
   try {
     console.log('🔧 Starting user quota update...\n');
+
+    // Initialize models first
+    await initializeModels();
 
     const { User } = getModels();
 

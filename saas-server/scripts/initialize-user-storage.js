@@ -16,7 +16,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { sequelize, getModels } = require('../models');
+const { sequelize, initializeModels, getModels } = require('../models');
 const storageManager = require('../services/storageManager');
 
 async function initializeAllUsers() {
@@ -37,6 +37,9 @@ async function initializeAllUsers() {
 
     console.log(`S3 Bucket: ${process.env.AWS_S3_BUCKET}`);
     console.log(`AWS Region: ${process.env.AWS_REGION || 'us-east-1'}\n`);
+
+    // Initialize models first
+    await initializeModels();
 
     const { User } = getModels();
 
