@@ -67,6 +67,28 @@ class StorageManager {
   }
 
   /**
+   * Ensure S3 client is initialized (auto-initialize if needed)
+   */
+  ensureS3Client() {
+    if (!this.s3Client) {
+      // Auto-initialize with environment variables
+      if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+        throw new Error('AWS credentials not configured in environment variables');
+      }
+
+      this.s3Client = new S3Client({
+        region: this.region,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      });
+
+      console.log(`📦 [STORAGE] S3 client initialized (bucket: ${this.bucketName}, region: ${this.region})`);
+    }
+  }
+
+  /**
    * Initialize storage structure for a new user
    */
   async initializeUserStorage(userId, licenseTier = 'starter') {
@@ -74,6 +96,9 @@ class StorageManager {
 
     try {
       console.log(`📦 [STORAGE] Initializing storage for user ${userId}`);
+
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
 
       // Create folder structure in S3
       const folders = [
@@ -188,6 +213,9 @@ class StorageManager {
     };
 
     try {
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
       await this.s3Client.send(new PutLifecycleConfigurationCommand({
         Bucket: this.bucketName,
         LifecycleConfiguration: lifecycleConfiguration
@@ -209,6 +237,9 @@ class StorageManager {
     let fileCount = 0;
 
     try {
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
       let continuationToken = null;
 
       do {
@@ -283,6 +314,9 @@ class StorageManager {
    * Upload file to user storage
    */
   async uploadFile(userId, deploymentId, fileName, fileContent, contentType = 'application/octet-stream') {
+    // Ensure S3 client is initialized
+    this.ensureS3Client();
+
     // Check quota first
     const quotaStatus = await this.checkStorageQuota(userId);
     if (quotaStatus.hasExceeded) {
@@ -328,6 +362,9 @@ class StorageManager {
     const prefix = this.getDeploymentStoragePath(userId, deploymentId);
 
     try {
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
       // List all objects with this prefix
       const objects = await this.s3Client.send(new ListObjectsV2Command({
         Bucket: this.bucketName,
