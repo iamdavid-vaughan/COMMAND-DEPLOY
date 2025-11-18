@@ -9,15 +9,17 @@ import { Check, Rocket, Zap, Star, Crown, ArrowRight } from 'lucide-react';
 interface PricingPlan {
   id: string;
   name: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  features: {
-    deploymentsPerMonth: number;
-    maxInstances: number;
-    maxS3Buckets: number;
-    maxDomains: number;
-    teamMembers: number;
-    support: string;
+  monthlyPrice: number | null;
+  yearlyPrice: number | null;
+  features: string[]; // Array of feature strings from backend
+  limits: {
+    deploymentsPerMonth?: number;
+    instances?: number;
+    maxS3Buckets?: number;
+    maxDomains?: number;
+    teamMembers?: number;
+    storageGB?: number;
+    concurrent?: number;
   };
 }
 
@@ -48,15 +50,24 @@ export default function PricingPage() {
     {
       id: 'starter',
       name: 'Starter',
-      monthlyPrice: 29,
-      yearlyPrice: 290,
-      features: {
-        deploymentsPerMonth: 3,
-        maxInstances: 2,
+      monthlyPrice: 39,
+      yearlyPrice: null,
+      features: [
+        '10 deployments per month',
+        '1 concurrent deployment',
+        '1 machine license',
+        'Up to 3 instances',
+        '10GB storage',
+        'Community support',
+        'DIY deployment automation'
+      ],
+      limits: {
+        deploymentsPerMonth: 10,
+        instances: 3,
         maxS3Buckets: 2,
         maxDomains: 2,
         teamMembers: 1,
-        support: 'Community',
+        storageGB: 10
       },
     },
     {
@@ -64,13 +75,23 @@ export default function PricingPage() {
       name: 'Professional',
       monthlyPrice: 99,
       yearlyPrice: 990,
-      features: {
-        deploymentsPerMonth: -1,
-        maxInstances: 10,
+      features: [
+        '50 deployments per month',
+        '5 concurrent deployments',
+        '2 machine licenses',
+        'Up to 15 instances',
+        '50GB storage',
+        'Email support',
+        'Full API access',
+        'Priority deployment queue'
+      ],
+      limits: {
+        deploymentsPerMonth: 50,
+        instances: 15,
         maxS3Buckets: 10,
         maxDomains: 10,
         teamMembers: 5,
-        support: 'Email (48h SLA)',
+        storageGB: 50
       },
     },
     {
@@ -78,27 +99,51 @@ export default function PricingPage() {
       name: 'Max',
       monthlyPrice: 199,
       yearlyPrice: 1990,
-      features: {
-        deploymentsPerMonth: -1,
-        maxInstances: 50,
-        maxS3Buckets: 50,
-        maxDomains: 50,
+      features: [
+        '150 deployments per month',
+        '15 concurrent deployments',
+        '3 machine licenses',
+        'Up to 50 instances',
+        '200GB storage',
+        'Priority support',
+        'Full API access',
+        'Advanced analytics',
+        'Custom deployment hooks'
+      ],
+      limits: {
+        deploymentsPerMonth: 150,
+        instances: 50,
+        maxS3Buckets: 25,
+        maxDomains: 25,
         teamMembers: 15,
-        support: 'Email & Chat (24h SLA)',
+        storageGB: 200
       },
     },
     {
       id: 'enterprise',
       name: 'Enterprise',
-      monthlyPrice: 0,
-      yearlyPrice: 0,
-      features: {
+      monthlyPrice: null,
+      yearlyPrice: null,
+      features: [
+        'Unlimited deployments',
+        'Unlimited concurrent',
+        'Unlimited licenses',
+        'Unlimited instances',
+        'Unlimited storage',
+        'Dedicated support',
+        'Full API access',
+        'SLA guarantee',
+        'Custom integrations',
+        'On-premise option',
+        'Training & onboarding'
+      ],
+      limits: {
         deploymentsPerMonth: -1,
-        maxInstances: -1,
+        instances: -1,
         maxS3Buckets: -1,
         maxDomains: -1,
         teamMembers: -1,
-        support: 'Priority (4h SLA) + Phone',
+        storageGB: -1
       },
     },
   ];
@@ -112,6 +157,8 @@ export default function PricingPage() {
       case 'max':
         return <Star className="w-8 h-8" />;
       case 'enterprise':
+        return <Crown className="w-8 h-8" />;
+      case 'dfy':
         return <Crown className="w-8 h-8" />;
       default:
         return <Rocket className="w-8 h-8" />;
@@ -128,77 +175,33 @@ export default function PricingPage() {
         return 'from-orange-500 to-orange-600';
       case 'enterprise':
         return 'from-pink-500 to-pink-600';
+      case 'dfy':
+        return 'from-green-500 to-green-600';
       default:
         return 'from-gray-500 to-gray-600';
     }
   };
 
   const formatPrice = (plan: PricingPlan) => {
-    if (plan.id === 'enterprise') {
+    if (plan.id === 'enterprise' || plan.monthlyPrice === null) {
       return 'Custom';
     }
     const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
     if (price === undefined || price === null) {
-      return '$0';
+      return 'Custom';
     }
     return `$${price}`;
   };
 
   const formatPricePerMonth = (plan: PricingPlan) => {
-    if (plan.id === 'enterprise') {
+    if (plan.id === 'enterprise' || plan.monthlyPrice === null) {
       return 'Contact us';
     }
     const price = billingCycle === 'monthly' ? plan.monthlyPrice : (plan.yearlyPrice ? Math.floor(plan.yearlyPrice / 12) : 0);
     if (price === undefined || price === null) {
-      return '$0/mo';
+      return 'Contact us';
     }
     return `$${price}/mo`;
-  };
-
-  const formatFeatureValue = (value: number) => {
-    if (value === -1) return 'Unlimited';
-    return value.toString();
-  };
-
-  const getPlanFeatures = (plan: PricingPlan) => {
-    const baseFeatures = [
-      {
-        name: 'Deployments per month',
-        value: formatFeatureValue(plan.features.deploymentsPerMonth),
-      },
-      {
-        name: 'EC2 Instances',
-        value: formatFeatureValue(plan.features.maxInstances),
-      },
-      {
-        name: 'S3 Buckets',
-        value: formatFeatureValue(plan.features.maxS3Buckets),
-      },
-      {
-        name: 'Custom Domains',
-        value: formatFeatureValue(plan.features.maxDomains),
-      },
-      {
-        name: 'Team Members',
-        value: formatFeatureValue(plan.features.teamMembers),
-      },
-      {
-        name: 'Support',
-        value: plan.features.support,
-      },
-    ];
-
-    // Add enterprise-specific features
-    if (plan.id === 'enterprise') {
-      baseFeatures.push(
-        { name: 'White-label', value: 'Yes' },
-        { name: 'On-premises option', value: 'Available' },
-        { name: 'Custom integrations', value: 'Included' },
-        { name: 'SLA guarantee', value: '99.9%' }
-      );
-    }
-
-    return baseFeatures;
   };
 
   if (loading) {
@@ -324,14 +327,14 @@ export default function PricingPage() {
                     <span className="text-5xl font-extrabold text-gray-900">
                       {formatPrice(plan)}
                     </span>
-                    {plan.id !== 'enterprise' && (
+                    {plan.id !== 'enterprise' && plan.monthlyPrice !== null && (
                       <span className="ml-1 text-xl text-gray-500">
                         /{billingCycle === 'monthly' ? 'mo' : 'yr'}
                       </span>
                     )}
                   </div>
 
-                  {billingCycle === 'yearly' && plan.id !== 'enterprise' && (
+                  {billingCycle === 'yearly' && plan.id !== 'enterprise' && plan.yearlyPrice !== null && (
                     <p className="mt-1 text-sm text-gray-500">
                       {formatPricePerMonth(plan)} billed annually
                     </p>
@@ -351,13 +354,10 @@ export default function PricingPage() {
 
                   {/* Features */}
                   <ul className="mt-8 space-y-4">
-                    {getPlanFeatures(plan).map((feature, index) => (
+                    {plan.features && plan.features.map((feature, index) => (
                       <li key={index} className="flex items-start">
                         <Check className="flex-shrink-0 w-5 h-5 text-green-500 mr-3 mt-0.5" />
-                        <div className="text-sm">
-                          <span className="font-medium text-gray-900">{feature.value}</span>
-                          <span className="text-gray-500"> {feature.name}</span>
-                        </div>
+                        <span className="text-sm text-gray-700">{feature}</span>
                       </li>
                     ))}
                   </ul>
