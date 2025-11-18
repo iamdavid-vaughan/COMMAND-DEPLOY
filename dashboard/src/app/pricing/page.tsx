@@ -263,7 +263,7 @@ export default function PricingPage() {
             Simple, transparent pricing
           </h1>
           <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
-            Choose the plan that fits your needs. All plans include SSL certificates, monitoring, and automatic backups.
+            Choose the plan that fits your needs. Deploy to AWS and GCP with SSL certificates, monitoring, and automatic backups.
           </p>
         </div>
 
@@ -370,11 +370,11 @@ export default function PricingPage() {
         {/* FAQ or Additional Info */}
         <div className="mt-16 text-center">
           <p className="text-gray-500">
-            All plans include 14-day money-back guarantee. No credit card required for trial.{' '}
+            All plans include a 7-day trial period. Credit card required to start trial.{' '}
             <Link href="/contact" className="text-blue-600 hover:text-blue-700 font-medium">
               Contact us
             </Link>{' '}
-            for enterprise solutions.
+            for enterprise solutions and custom AWS/GCP deployment needs.
           </p>
         </div>
       </div>

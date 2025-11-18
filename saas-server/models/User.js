@@ -144,6 +144,34 @@ module.exports = (sequelize) => {
     storage_warning_sent_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    // Trial Management
+    trial_started_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    trial_ends_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    trial_plan: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    payment_method_added: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    can_deploy_external: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    subscription_status: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'none' // none, trial, active, cancelled, expired
     }
   }, {
     tableName: 'users',
