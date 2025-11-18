@@ -4,8 +4,11 @@
  */
 
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, PutLifecycleConfigurationCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { getModels } = require('../models');
 const crypto = require('crypto');
+const archiver = require('archiver');
+const { Readable } = require('stream');
 
 // Storage quotas per pricing tier (in GB)
 // Updated to match pricing_tiers table in database
@@ -444,6 +447,242 @@ class StorageManager {
       fileCount: usage.fileCount,
       lastCalculated: user.storage_last_calculated_at,
       storagePath: user.storage_path
+    };
+  }
+
+  /**
+   * Create an archive of all user files for download
+   * Used when account is cancelled or becomes inactive
+   */
+  async createUserArchive(userId) {
+    const { User } = getModels();
+
+    try {
+      console.log(`📦 [STORAGE] Creating archive for user ${userId}`);
+
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      const userPath = this.getUserStoragePath(userId);
+      const archivePath = `archives/${userId}/${Date.now()}.zip`;
+
+      // List all user files
+      const objects = [];
+      let continuationToken = null;
+
+      do {
+        const response = await this.s3Client.send(new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          Prefix: userPath,
+          ContinuationToken: continuationToken
+        }));
+
+        if (response.Contents) {
+          objects.push(...response.Contents);
+        }
+
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : null;
+      } while (continuationToken);
+
+      if (objects.length === 0) {
+        console.log(`📦 [STORAGE] No files to archive for user ${userId}`);
+        return {
+          success: false,
+          message: 'No files to archive',
+          fileCount: 0
+        };
+      }
+
+      console.log(`📦 [STORAGE] Found ${objects.length} files to archive`);
+
+      // Create archive info in database
+      const archiveInfo = {
+        path: archivePath,
+        fileCount: objects.length,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        status: 'ready'
+      };
+
+      // Update user record with archive info
+      await User.update({
+        archive_path: archivePath,
+        archive_created_at: archiveInfo.createdAt,
+        archive_expires_at: archiveInfo.expiresAt
+      }, {
+        where: { id: userId }
+      });
+
+      console.log(`✅ [STORAGE] Archive created for user ${userId}: ${archivePath}`);
+
+      return {
+        success: true,
+        archivePath,
+        fileCount: objects.length,
+        expiresAt: archiveInfo.expiresAt,
+        message: `Archive created with ${objects.length} files. Available for 30 days.`
+      };
+
+    } catch (error) {
+      console.error(`❌ [STORAGE] Failed to create archive for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a presigned download URL for user archive
+   */
+  async getArchiveDownloadUrl(userId) {
+    const { User } = getModels();
+
+    try {
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      if (!user.archive_path) {
+        throw new Error('No archive available for this user');
+      }
+
+      // Check if archive has expired
+      if (user.archive_expires_at && new Date() > new Date(user.archive_expires_at)) {
+        throw new Error('Archive has expired');
+      }
+
+      // Generate pre-signed URL (valid for 1 hour)
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: user.archive_path
+      });
+
+      const downloadUrl = await getSignedUrl(this.s3Client, command, {
+        expiresIn: 3600 // 1 hour
+      });
+
+      console.log(`✅ [STORAGE] Generated download URL for user ${userId} archive`);
+
+      return {
+        downloadUrl,
+        archivePath: user.archive_path,
+        expiresAt: user.archive_expires_at,
+        fileCount: null // Would need to be stored separately
+      };
+
+    } catch (error) {
+      console.error(`❌ [STORAGE] Failed to generate download URL for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete user archive (called after retention period or manual deletion)
+   */
+  async deleteUserArchive(userId) {
+    const { User } = getModels();
+
+    try {
+      // Ensure S3 client is initialized
+      this.ensureS3Client();
+
+      const user = await User.findByPk(userId);
+      if (!user || !user.archive_path) {
+        return { success: false, message: 'No archive to delete' };
+      }
+
+      // Delete archive from S3
+      await this.s3Client.send(new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: user.archive_path
+      }));
+
+      // Clear archive info from user record
+      await User.update({
+        archive_path: null,
+        archive_created_at: null,
+        archive_expires_at: null
+      }, {
+        where: { id: userId }
+      });
+
+      console.log(`✅ [STORAGE] Deleted archive for user ${userId}`);
+
+      return { success: true, message: 'Archive deleted successfully' };
+
+    } catch (error) {
+      console.error(`❌ [STORAGE] Failed to delete archive for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Schedule archive creation when account becomes inactive
+   */
+  async scheduleArchiveForInactiveAccount(userId) {
+    const { User } = getModels();
+
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Only create archive if user is inactive/cancelled
+      if (user.status !== 'inactive' && user.subscription_status !== 'cancelled') {
+        console.log(`⚠️  [STORAGE] User ${userId} is not inactive, skipping archive`);
+        return { success: false, message: 'User is not inactive' };
+      }
+
+      // Create archive
+      const result = await this.createUserArchive(userId);
+
+      console.log(`✅ [STORAGE] Scheduled archive for inactive user ${userId}`);
+
+      return result;
+
+    } catch (error) {
+      console.error(`❌ [STORAGE] Failed to schedule archive for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get archive status for a user
+   */
+  async getArchiveStatus(userId) {
+    const { User } = getModels();
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (!user.archive_path) {
+      return {
+        hasArchive: false,
+        message: 'No archive available'
+      };
+    }
+
+    const now = new Date();
+    const expiresAt = user.archive_expires_at ? new Date(user.archive_expires_at) : null;
+    const isExpired = expiresAt && now > expiresAt;
+
+    return {
+      hasArchive: !isExpired,
+      archivePath: user.archive_path,
+      createdAt: user.archive_created_at,
+      expiresAt: user.archive_expires_at,
+      daysRemaining: expiresAt ? Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24)) : 0,
+      isExpired
     };
   }
 }
