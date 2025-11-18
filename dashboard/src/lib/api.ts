@@ -359,6 +359,12 @@ export const adminAPI = {
   }) => api.post('/api/admin/pricing', data),
 
   deletePricingTier: (id: string) => api.delete(`/api/admin/pricing/${id}`),
+
+  // Storage management
+  getStorageStats: () => api.get('/api/admin/storage-stats'),
+
+  recalculateUserStorage: (userId: string) =>
+    api.post(`/api/admin/recalculate-storage/${userId}`),
 };
 
 export const auditAPI = {

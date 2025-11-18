@@ -819,4 +819,120 @@ router.delete('/pricing/:id', authenticate, requireSuperAdmin, async (req, res, 
   }
 });
 
+/**
+ * GET /api/admin/storage-stats - Get storage usage statistics for all users
+ */
+router.get('/storage-stats', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { User } = getModels();
+
+    // Get all users with storage data
+    const users = await User.findAll({
+      attributes: [
+        'id',
+        'email',
+        'first_name',
+        'last_name',
+        'license_tier',
+        'status',
+        'storage_used_gb',
+        'storage_quota_gb',
+        'storage_path',
+        'storage_last_calculated_at'
+      ],
+      where: {
+        storage_quota_gb: {
+          [require('sequelize').Op.not]: null
+        }
+      },
+      order: [['storage_used_gb', 'DESC']]
+    });
+
+    // Calculate aggregate stats
+    const totalStorageUsedGB = users.reduce((sum, u) => sum + (parseFloat(u.storage_used_gb) || 0), 0);
+    const totalStorageQuotaGB = users.reduce((sum, u) => sum + (parseFloat(u.storage_quota_gb) || 0), 0);
+    const percentageUsed = totalStorageQuotaGB > 0 ? (totalStorageUsedGB / totalStorageQuotaGB) * 100 : 0;
+    const usersNearLimit = users.filter(u => {
+      const used = parseFloat(u.storage_used_gb) || 0;
+      const quota = parseFloat(u.storage_quota_gb) || 1;
+      return (used / quota) * 100 >= 80;
+    }).length;
+    const averageUsagePerUser = users.length > 0 ? totalStorageUsedGB / users.length : 0;
+
+    // Format user storage data
+    const userStorage = users.map(u => {
+      const usedGB = parseFloat(u.storage_used_gb) || 0;
+      const quotaGB = parseFloat(u.storage_quota_gb) || 1;
+      const percentUsed = (usedGB / quotaGB) * 100;
+
+      return {
+        userId: u.id,
+        email: u.email,
+        name: `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+        storagePath: u.storage_path,
+        storageUsedGB: usedGB,
+        storageQuotaGB: quotaGB,
+        percentageUsed: percentUsed,
+        lastCalculated: u.storage_last_calculated_at,
+        licenseTier: u.license_tier,
+        status: u.status
+      };
+    });
+
+    console.log(`📊 [ADMIN] Storage stats retrieved: ${users.length} users, ${totalStorageUsedGB.toFixed(2)}GB used`);
+
+    res.json({
+      success: true,
+      stats: {
+        totalStorageUsedGB,
+        totalStorageQuotaGB,
+        percentageUsed,
+        totalUsers: users.length,
+        usersNearLimit,
+        averageUsagePerUser
+      },
+      users: userStorage
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error getting storage stats:', error);
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/recalculate-storage/:userId - Recalculate storage for specific user
+ */
+router.post('/recalculate-storage/:userId', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { User } = getModels();
+    const storageManager = require('../services/storageManager');
+
+    const user = await User.findByPk(req.params.userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found'
+      });
+    }
+
+    // Trigger storage recalculation (async)
+    setImmediate(async () => {
+      try {
+        await storageManager.calculateUserStorage(user.id);
+        console.log(`✅ [ADMIN] Storage recalculated for user ${user.email}`);
+      } catch (error) {
+        console.error(`❌ [ADMIN] Failed to recalculate storage for ${user.email}:`, error);
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Storage recalculation started'
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error starting storage recalculation:', error);
+    next(error);
+  }
+});
+
 module.exports = router;
