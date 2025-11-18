@@ -900,6 +900,81 @@ router.get('/storage-stats', authenticate, requireSuperAdmin, async (req, res, n
 });
 
 /**
+ * GET /api/admin/storage-stats/:userId - Get detailed storage for specific user
+ */
+router.get('/storage-stats/:userId', authenticate, requireSuperAdmin, async (req, res, next) => {
+  try {
+    const { User } = getModels();
+    const { userId } = req.params;
+
+    // Get user with storage data
+    const user = await User.findByPk(userId, {
+      attributes: [
+        'id',
+        'email',
+        'first_name',
+        'last_name',
+        'license_tier',
+        'status',
+        'storage_used_gb',
+        'storage_quota_gb',
+        'storage_path',
+        'storage_initialized_at',
+        'storage_last_calculated_at',
+        'created_at',
+        'last_login_at'
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    const usedGB = parseFloat(user.storage_used_gb) || 0;
+    const quotaGB = parseFloat(user.storage_quota_gb) || 1;
+    const percentUsed = (usedGB / quotaGB) * 100;
+
+    // Mock storage breakdown by category
+    // In a real implementation, this would come from S3 bucket analysis
+    const totalUsed = parseFloat(user.storage_used_gb) || 0;
+    const breakdown = {
+      deployments: totalUsed * 0.60, // 60% deployments
+      uploads: totalUsed * 0.20,     // 20% uploads
+      backups: totalUsed * 0.10,     // 10% backups
+      logs: totalUsed * 0.05,        // 5% logs
+      temp: totalUsed * 0.03,        // 3% temp
+      billing: totalUsed * 0.01,     // 1% billing
+      other: totalUsed * 0.01        // 1% other
+    };
+
+    console.log(`📊 [ADMIN] Retrieved storage details for user: ${user.email}`);
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+        license_tier: user.license_tier,
+        storage_used_gb: usedGB,
+        storage_quota_gb: quotaGB,
+        storage_percentage: percentUsed,
+        storage_initialized_at: user.storage_initialized_at,
+        created_at: user.created_at,
+        last_login: user.last_login_at
+      },
+      breakdown
+    });
+  } catch (error) {
+    console.error('❌ [ADMIN] Error getting user storage details:', error);
+    next(error);
+  }
+});
+
+/**
  * POST /api/admin/recalculate-storage/:userId - Recalculate storage for specific user
  */
 router.post('/recalculate-storage/:userId', authenticate, requireSuperAdmin, async (req, res, next) => {

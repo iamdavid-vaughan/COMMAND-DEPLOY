@@ -325,7 +325,11 @@ export default function AdminUsagePage() {
                 </tr>
               ) : (
                 filteredUsers.map((userStorage) => (
-                  <tr key={userStorage.userId} className="hover:bg-gray-50">
+                  <tr
+                    key={userStorage.userId}
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/dashboard/admin/usage/${userStorage.userId}`)}
+                  >
                     <td className="px-6 py-4">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{userStorage.name || 'N/A'}</div>

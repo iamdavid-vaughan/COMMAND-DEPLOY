@@ -363,6 +363,8 @@ export const adminAPI = {
   // Storage management
   getStorageStats: () => api.get('/api/admin/storage-stats'),
 
+  getUserStorageDetail: (userId: string) => api.get(`/api/admin/storage-stats/${userId}`),
+
   recalculateUserStorage: (userId: string) =>
     api.post(`/api/admin/recalculate-storage/${userId}`),
 };
