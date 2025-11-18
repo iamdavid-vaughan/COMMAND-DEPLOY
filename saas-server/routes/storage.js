@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const storageManager = require('../services/storageManager');
 const { getModels } = require('../models');
 
@@ -13,9 +13,9 @@ const { getModels } = require('../models');
  * GET /api/storage/stats
  * Get current user's storage statistics
  */
-router.get('/stats', authenticateToken, async (req, res) => {
+router.get('/stats', authenticate, async (req, res) => {
   try {
-    const stats = await storageManager.getStorageStats(req.user.id);
+    const stats = await storageManager.getStorageStats(req.user.userId);
 
     res.json({
       success: true,
@@ -36,9 +36,9 @@ router.get('/stats', authenticateToken, async (req, res) => {
  * GET /api/storage/quota
  * Check storage quota status
  */
-router.get('/quota', authenticateToken, async (req, res) => {
+router.get('/quota', authenticate, async (req, res) => {
   try {
-    const quotaStatus = await storageManager.checkStorageQuota(req.user.id);
+    const quotaStatus = await storageManager.checkStorageQuota(req.user.userId);
 
     res.json({
       success: true,
@@ -59,9 +59,9 @@ router.get('/quota', authenticateToken, async (req, res) => {
  * POST /api/storage/calculate
  * Recalculate storage usage (expensive operation)
  */
-router.post('/calculate', authenticateToken, async (req, res) => {
+router.post('/calculate', authenticate, async (req, res) => {
   try {
-    const usage = await storageManager.calculateStorageUsage(req.user.id);
+    const usage = await storageManager.calculateStorageUsage(req.user.userId);
 
     res.json({
       success: true,
@@ -85,10 +85,10 @@ router.post('/calculate', authenticateToken, async (req, res) => {
  * POST /api/storage/init
  * Initialize storage for current user (idempotent)
  */
-router.post('/init', authenticateToken, async (req, res) => {
+router.post('/init', authenticate, async (req, res) => {
   try {
     const { User } = getModels();
-    const user = await User.findByPk(req.user.id);
+    const user = await User.findByPk(req.user.userId);
 
     if (!user) {
       return res.status(404).json({
@@ -130,7 +130,7 @@ router.post('/init', authenticateToken, async (req, res) => {
  * DELETE /api/storage/deployment/:deploymentId
  * Delete all files for a deployment
  */
-router.delete('/deployment/:deploymentId', authenticateToken, async (req, res) => {
+router.delete('/deployment/:deploymentId', authenticate, async (req, res) => {
   try {
     const { Deployment } = getModels();
 
@@ -138,7 +138,7 @@ router.delete('/deployment/:deploymentId', authenticateToken, async (req, res) =
     const deployment = await Deployment.findOne({
       where: {
         id: req.params.deploymentId,
-        user_id: req.user.id
+        user_id: req.user.userId
       }
     });
 
@@ -150,7 +150,7 @@ router.delete('/deployment/:deploymentId', authenticateToken, async (req, res) =
     }
 
     // Delete storage
-    const result = await storageManager.deleteDeploymentStorage(req.user.id, deployment.id);
+    const result = await storageManager.deleteDeploymentStorage(req.user.userId, deployment.id);
 
     res.json({
       success: true,
@@ -172,7 +172,7 @@ router.delete('/deployment/:deploymentId', authenticateToken, async (req, res) =
  * GET /api/storage/usage-by-tier
  * Admin only: Get storage usage aggregated by tier
  */
-router.get('/usage-by-tier', authenticateToken, async (req, res) => {
+router.get('/usage-by-tier', authenticate, async (req, res) => {
   try {
     // Check if user is admin
     if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
