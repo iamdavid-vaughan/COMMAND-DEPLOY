@@ -12,6 +12,8 @@ const { body, validationResult } = require('express-validator');
 const { generateToken } = require('../middleware/auth');
 const { getModels } = require('../models');
 const { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+const billing = require('../services/billing');
+const storageManager = require('../services/storageManager');
 
 const router = express.Router();
 
@@ -19,12 +21,25 @@ const router = express.Router();
  * POST /api/auth/register
  * Register new user - EMAIL FIRST (no password yet)
  * Sends verification email with 24hr token
+ *
+ * Optional trial signup with payment:
+ * - plan: starter, professional, max, enterprise
+ * - billingCycle: monthly, yearly
+ * - paymentMethod: { cardNumber, expirationDate, cvv, billingZip }
  */
 router.post('/register',
   [
     body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
     body('name').trim().notEmpty().withMessage('Name is required'),
-    body('company').optional().trim()
+    body('company').optional().trim(),
+    // Optional trial signup fields
+    body('plan').optional().isIn(['starter', 'professional', 'max', 'enterprise']).withMessage('Invalid plan'),
+    body('billingCycle').optional().isIn(['monthly', 'yearly']).withMessage('Invalid billing cycle'),
+    body('paymentMethod').optional().isObject().withMessage('Payment method must be an object'),
+    body('paymentMethod.cardNumber').optional().isString().withMessage('Card number is required for trial'),
+    body('paymentMethod.expirationDate').optional().matches(/^\d{4}-\d{2}$/).withMessage('Expiration date must be YYYY-MM format'),
+    body('paymentMethod.cvv').optional().isString().isLength({ min: 3, max: 4 }).withMessage('CVV must be 3-4 digits'),
+    body('paymentMethod.billingZip').optional().isString().withMessage('Billing ZIP is required for trial')
   ],
   async (req, res, next) => {
     try {
@@ -37,7 +52,8 @@ router.post('/register',
         });
       }
 
-      const { email, name, company } = req.body;
+      const { email, name, company, plan, billingCycle, paymentMethod } = req.body;
+      const isTrialSignup = !!(plan && billingCycle && paymentMethod);
       const { User, EmailVerificationToken } = getModels();
 
       // Check if user already exists
@@ -83,6 +99,9 @@ router.post('/register',
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
+      // Determine license tier based on signup type
+      const licenseTier = isTrialSignup ? plan : 'starter';
+
       // Create user (email_verified = false, is_active = false, no password yet)
       const user = await User.create({
         email,
@@ -93,9 +112,49 @@ router.post('/register',
         company_name: company || null,
         email_verified: false,
         is_active: false,
-        license_tier: 'starter',
+        license_tier: licenseTier,
+        subscription_status: isTrialSignup ? 'pending' : 'none', // Will be set to 'trial' after subscription creation
         status: 'pending' // Changed from 'active' to 'pending'
       });
+
+      // If trial signup with payment, create Authorize.Net subscription
+      let trialResult = null;
+      if (isTrialSignup) {
+        try {
+          console.log(`💳 [AUTH] Creating trial subscription for: ${email}`);
+
+          // Create trial subscription with Authorize.Net
+          trialResult = await billing.createTrialSubscription(
+            user.id,
+            email,
+            plan,
+            billingCycle,
+            paymentMethod.cardNumber,
+            paymentMethod.expirationDate,
+            paymentMethod.cvv,
+            paymentMethod.billingZip
+          );
+
+          // Initialize S3 storage for user
+          await storageManager.initializeUserStorage(user.id, plan);
+
+          console.log(`✅ [AUTH] Trial subscription created: ${trialResult.subscriptionId}`);
+          console.log(`✅ [AUTH] Trial ends: ${trialResult.trialEndsAt}`);
+        } catch (billingError) {
+          console.error(`❌ [AUTH] Trial subscription failed for ${email}:`, billingError);
+
+          // Delete the user if subscription creation failed
+          await user.destroy();
+
+          return res.status(402).json({
+            error: 'Payment Failed',
+            message: billingError.message || 'Failed to process payment method. Please check your card details.',
+            details: {
+              reason: billingError.message
+            }
+          });
+        }
+      }
 
       // Generate verification token (24 hour expiration)
       const token = crypto.randomBytes(32).toString('hex');
@@ -112,11 +171,21 @@ router.post('/register',
 
       console.log(`✅ [AUTH] User registered: ${email} - Verification email sent`);
 
+      const responseMessage = isTrialSignup
+        ? 'Trial subscription activated! Please check your email to verify your account and set your password. Your 7-day trial starts now.'
+        : 'Registration successful! Please check your email to verify your account and set your password.';
+
       res.status(201).json({
         success: true,
-        message: 'Registration successful! Please check your email to verify your account and set your password.',
+        message: responseMessage,
         requiresVerification: true,
-        email: user.email
+        email: user.email,
+        trial: isTrialSignup ? {
+          plan: plan,
+          billingCycle: billingCycle,
+          trialEndsAt: trialResult?.trialEndsAt,
+          subscriptionId: trialResult?.subscriptionId
+        } : null
       });
 
     } catch (error) {

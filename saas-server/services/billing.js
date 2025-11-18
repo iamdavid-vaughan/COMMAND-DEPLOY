@@ -107,6 +107,72 @@ const PLANS = {
 };
 
 /**
+ * Create a payment profile (credit card) for validation
+ * Returns a payment profile object that can be used with createCustomerProfile
+ */
+function createPaymentProfile(cardNumber, expirationDate, cvv, billingZip) {
+  const creditCard = new ApiContracts.CreditCardType();
+  creditCard.setCardNumber(cardNumber);
+  creditCard.setExpirationDate(expirationDate); // Format: YYYY-MM
+  creditCard.setCardCode(cvv);
+
+  const payment = new ApiContracts.PaymentType();
+  payment.setCreditCard(creditCard);
+
+  const billTo = new ApiContracts.CustomerAddressType();
+  billTo.setZip(billingZip);
+
+  const paymentProfile = new ApiContracts.CustomerPaymentProfileType();
+  paymentProfile.setPayment(payment);
+  paymentProfile.setBillTo(billTo);
+
+  return paymentProfile;
+}
+
+/**
+ * Validate a payment method without charging
+ * This ensures the card is valid before starting trial
+ */
+async function validatePaymentMethod(cardNumber, expirationDate, cvv, billingZip) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
+
+  return new Promise((resolve, reject) => {
+    // Create payment profile for validation
+    const paymentProfile = createPaymentProfile(cardNumber, expirationDate, cvv, billingZip);
+
+    // Set validation mode to testMode for card validation
+    paymentProfile.setValidationMode(ApiContracts.ValidationModeEnum.TESTMODE);
+
+    const customerProfileType = new ApiContracts.CustomerProfileType();
+    customerProfileType.setPaymentProfiles([paymentProfile]);
+
+    const validateRequest = new ApiContracts.CreateCustomerProfileRequest();
+    validateRequest.setMerchantAuthentication(merchantAuthenticationType);
+    validateRequest.setProfile(customerProfileType);
+    validateRequest.setValidationMode(ApiContracts.ValidationModeEnum.TESTMODE);
+
+    const ctrl = new ApiControllers.CreateCustomerProfileController(validateRequest.getJSON());
+    ctrl.setEnvironment(environment);
+
+    ctrl.execute(() => {
+      const apiResponse = ctrl.getResponse();
+      const response = new ApiContracts.CreateCustomerProfileResponse(apiResponse);
+
+      if (response.getMessages().getResultCode() === ApiContracts.MessageTypeEnum.OK) {
+        resolve({
+          valid: true,
+          customerProfileId: response.getCustomerProfileId(),
+          paymentProfileId: response.getCustomerPaymentProfileIdList()?.getNumericString()?.[0]
+        });
+      } else {
+        const errorMessage = response.getMessages().getMessage()[0].getText();
+        reject(new Error(errorMessage));
+      }
+    });
+  });
+}
+
+/**
  * Create a customer profile in Authorize.Net
  */
 async function createCustomerProfile(userId, email, paymentProfile = null) {
@@ -219,6 +285,129 @@ async function createSubscription(userId, plan, billingCycle, paymentProfileId, 
         reject(new Error(response.getMessages().getMessage()[0].getText()));
       }
     });
+  });
+}
+
+/**
+ * Create a subscription with 7-day trial
+ * Trial period: $0 for 7 days, then regular billing starts
+ */
+async function createTrialSubscription(userId, email, plan, billingCycle, cardNumber, expirationDate, cvv, billingZip) {
+  const { merchantAuthenticationType, environment } = getAuthorizeNetConfig();
+  const { User, Subscription } = getModels();
+
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 1. Fetch plan from database
+      const planConfig = await getPlanById(plan);
+      if (!planConfig) {
+        return reject(new Error('Invalid plan'));
+      }
+
+      const amount = billingCycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
+      const intervalLength = billingCycle === 'yearly' ? 12 : 1;
+
+      // 2. Create payment profile
+      const paymentProfile = createPaymentProfile(cardNumber, expirationDate, cvv, billingZip);
+
+      // 3. Create customer profile with payment method
+      const profileResult = await createCustomerProfile(userId, email, paymentProfile);
+      const { customerProfileId, paymentProfileId } = profileResult;
+
+      // 4. Create payment schedule with trial
+      const interval = new ApiContracts.PaymentScheduleType.Interval();
+      interval.setLength(intervalLength);
+      interval.setUnit(ApiContracts.ARBSubscriptionUnitEnum.MONTHS);
+
+      const paymentScheduleType = new ApiContracts.PaymentScheduleType();
+      paymentScheduleType.setInterval(interval);
+
+      // Start date is 7 days from now (after trial)
+      const trialEndDate = new Date();
+      trialEndDate.setDate(trialEndDate.getDate() + 7);
+      paymentScheduleType.setStartDate(trialEndDate.toISOString().split('T')[0]);
+      paymentScheduleType.setTotalOccurrences(9999); // Ongoing
+
+      // Set trial amount to $0 for 7 days
+      paymentScheduleType.setTrialOccurrences(1);
+
+      // 5. Create subscription
+      const arbSubscription = new ApiContracts.ARBSubscriptionType();
+      arbSubscription.setName(`${planConfig.name} - ${billingCycle} (7-day trial)`);
+      arbSubscription.setPaymentSchedule(paymentScheduleType);
+      arbSubscription.setAmount(amount);
+      arbSubscription.setTrialAmount(0); // $0 during trial
+
+      // Set customer profile
+      const customerProfileIdType = new ApiContracts.CustomerProfileIdType();
+      customerProfileIdType.setCustomerProfileId(customerProfileId);
+      customerProfileIdType.setCustomerPaymentProfileId(paymentProfileId);
+      arbSubscription.setProfile(customerProfileIdType);
+
+      const createRequest = new ApiContracts.ARBCreateSubscriptionRequest();
+      createRequest.setMerchantAuthentication(merchantAuthenticationType);
+      createRequest.setSubscription(arbSubscription);
+
+      const ctrl = new ApiControllers.ARBCreateSubscriptionController(createRequest.getJSON());
+      ctrl.setEnvironment(environment);
+
+      ctrl.execute(async () => {
+        const apiResponse = ctrl.getResponse();
+        const response = new ApiContracts.ARBCreateSubscriptionResponse(apiResponse);
+
+        if (response.getMessages().getResultCode() === ApiContracts.MessageTypeEnum.OK) {
+          const subscriptionId = response.getSubscriptionId();
+
+          // Calculate trial dates
+          const now = new Date();
+          const trialEndsAt = new Date(now);
+          trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+
+          // 6. Save subscription to database
+          const subscription = await Subscription.create({
+            user_id: userId,
+            authnet_subscription_id: subscriptionId,
+            authnet_customer_profile_id: customerProfileId,
+            authnet_payment_profile_id: paymentProfileId,
+            plan: plan,
+            billing_cycle: billingCycle,
+            amount: amount,
+            status: 'trialing',
+            trial_start: now,
+            trial_end: trialEndsAt,
+            current_period_start: trialEndsAt,
+            current_period_end: new Date(trialEndsAt.getTime() + (billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000)
+          });
+
+          // 7. Update user record
+          await User.update({
+            subscription_status: 'trial',
+            trial_started_at: now,
+            trial_ends_at: trialEndsAt,
+            trial_plan: plan,
+            payment_method_added: true,
+            can_deploy_external: false, // Still false during trial
+            license_tier: plan,
+            authnet_customer_profile_id: customerProfileId,
+            authnet_payment_profile_id: paymentProfileId
+          }, {
+            where: { id: userId }
+          });
+
+          resolve({
+            subscriptionId,
+            customerProfileId,
+            paymentProfileId,
+            subscription,
+            trialEndsAt
+          });
+        } else {
+          reject(new Error(response.getMessages().getMessage()[0].getText()));
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
@@ -402,8 +591,11 @@ async function getPlanById(planId) {
 
 module.exports = {
   PLANS,
+  createPaymentProfile,
+  validatePaymentMethod,
   createCustomerProfile,
   createSubscription,
+  createTrialSubscription,
   cancelSubscription,
   getSubscriptionDetails,
   processWebhook,
