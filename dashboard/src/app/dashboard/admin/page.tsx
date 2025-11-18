@@ -21,6 +21,7 @@ import {
   Settings,
   Mail,
   Eye,
+  HardDrive,
 } from 'lucide-react';
 
 interface User {
@@ -242,7 +243,7 @@ export default function AdminPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <a
             href="/dashboard/admin/security"
             className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-sm p-6 text-white hover:from-blue-700 hover:to-blue-800 transition-all transform hover:scale-105"
@@ -269,6 +270,34 @@ export default function AdminPage() {
             </div>
             <p className="text-purple-100 text-sm">
               Configure Authorize.Net, Postmark, and other platform integrations
+            </p>
+          </a>
+          <a
+            href="/dashboard/admin/pricing"
+            className="bg-gradient-to-r from-green-600 to-green-700 rounded-lg shadow-sm p-6 text-white hover:from-green-700 hover:to-green-800 transition-all transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                <DollarSign className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold">Pricing Management</h3>
+            </div>
+            <p className="text-green-100 text-sm">
+              Edit pricing tiers, features, and subscription plans
+            </p>
+          </a>
+          <a
+            href="/dashboard/admin/usage"
+            className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-lg shadow-sm p-6 text-white hover:from-orange-700 hover:to-orange-800 transition-all transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-white bg-opacity-20 p-2 rounded-lg">
+                <HardDrive className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold">Storage Usage</h3>
+            </div>
+            <p className="text-orange-100 text-sm">
+              Monitor S3 storage usage and per-client analytics
             </p>
           </a>
         </div>
