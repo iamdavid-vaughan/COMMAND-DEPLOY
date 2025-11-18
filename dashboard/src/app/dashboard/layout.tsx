@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   Shield,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -26,6 +27,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const { user, isInitialized, logout, initAuth } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showBetaModal, setShowBetaModal] = useState(false);
 
   useEffect(() => {
     initAuth();
@@ -137,6 +139,21 @@ export default function DashboardLayout({
           })}
         </nav>
 
+        {/* Beta Notice Badge */}
+        <div className="px-4 py-2">
+          <button
+            onClick={() => setShowBetaModal(true)}
+            className="flex items-center w-full px-3 py-2 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors group"
+            title="Click for beta information"
+          >
+            <AlertCircle className="h-4 w-4 mr-2 group-hover:animate-pulse" />
+            <span className="flex items-center">
+              BETA
+              <span className="ml-1 text-[10px] opacity-75">(Click for info)</span>
+            </span>
+          </button>
+        </div>
+
         {/* Logout button */}
         <div className="p-4 border-t border-gray-200">
           <button
@@ -148,6 +165,75 @@ export default function DashboardLayout({
           </button>
         </div>
       </div>
+
+      {/* Beta Modal */}
+      {showBetaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowBetaModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Beta Software</h3>
+                  <p className="text-sm text-orange-600 font-medium">Currently in Beta</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBetaModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm text-gray-600">
+              <p>
+                <strong className="text-gray-900">Focal Deploy is currently in beta.</strong> While we strive to provide a reliable service, you may encounter:
+              </p>
+
+              <ul className="list-disc list-inside space-y-2 ml-2">
+                <li>Occasional bugs or unexpected behavior</li>
+                <li>Features that are still being refined</li>
+                <li>Temporary service interruptions</li>
+                <li>Changes to functionality without prior notice</li>
+              </ul>
+
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded mt-4">
+                <p className="text-sm text-blue-900">
+                  <strong>Important:</strong> We recommend testing thoroughly before using in production environments. Regular backups of your data are strongly advised.
+                </p>
+              </div>
+
+              <p className="mt-4">
+                By using this beta service, you acknowledge that the software is provided "as is" and may not function perfectly. We appreciate your patience and feedback as we continue to improve!
+              </p>
+
+              <div className="bg-gray-50 p-3 rounded mt-4">
+                <p className="text-xs text-gray-600">
+                  <strong>Questions or found a bug?</strong> Contact support at{' '}
+                  <a href="mailto:support@focuswithfocal.io" className="text-blue-600 hover:underline">
+                    support@focuswithfocal.io
+                  </a>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <button
+                onClick={() => setShowBetaModal(false)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Got it, thanks!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Main content */}
       <div className="lg:pl-64">
