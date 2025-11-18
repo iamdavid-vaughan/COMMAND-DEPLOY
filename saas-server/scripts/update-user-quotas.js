@@ -12,7 +12,8 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const { sequelize, initializeModels, getModels } = require('../models');
+const { initializeDatabase } = require('../services/database');
+const { initializeModels, getModels } = require('../models');
 
 // Storage quotas per tier (must match storageManager.js)
 const STORAGE_QUOTAS = {
@@ -28,7 +29,8 @@ async function updateUserQuotas() {
   try {
     console.log('🔧 Starting user quota update...\n');
 
-    // Initialize models first
+    // Initialize database and models
+    const sequelize = await initializeDatabase();
     await initializeModels();
 
     const { User } = getModels();
@@ -79,12 +81,23 @@ async function updateUserQuotas() {
 
   } catch (error) {
     console.error('\n❌ Fatal error:', error);
+    const { closeDatabase } = require('../services/database');
+    await closeDatabase();
     process.exit(1);
-  } finally {
-    await sequelize.close();
+  }
+}
+
+async function main() {
+  try {
+    await updateUserQuotas();
+    const { closeDatabase } = require('../services/database');
+    await closeDatabase();
     process.exit(0);
+  } catch (error) {
+    console.error('\n❌ Fatal error:', error);
+    process.exit(1);
   }
 }
 
 // Run the script
-updateUserQuotas();
+main();
