@@ -189,6 +189,26 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['password_reset_token']
+      },
+      {
+        fields: ['storage_used_gb'],
+        name: 'idx_users_storage_used'
+      },
+      {
+        fields: ['twofa_enabled'],
+        name: 'idx_users_twofa_enabled'
+      },
+      {
+        fields: ['email_verified'],
+        name: 'idx_users_email_verified'
+      },
+      {
+        unique: true,
+        fields: ['oauth_provider', 'oauth_id'],
+        name: 'idx_users_oauth',
+        where: {
+          oauth_provider: { [sequelize.Sequelize.Op.ne]: null }
+        }
       }
     ]
   });
