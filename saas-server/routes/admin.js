@@ -8,6 +8,7 @@ const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { getModels } = require('../models');
+const logger = require('../utils/logger');
 
 /**
  * Middleware to check if user is super admin
@@ -61,7 +62,7 @@ router.get('/users', authenticate, requireSuperAdmin, async (req, res, next) => 
       attributes: { exclude: ['password_hash'] }
     });
 
-    console.log(`📊 [ADMIN] Listed ${users.length} users (total: ${count})`);
+    logger.info('Admin: Listed users', { count: users.length, total: count, admin: req.user.email });
 
     res.json({
       success: true,
@@ -88,7 +89,7 @@ router.get('/users', authenticate, requireSuperAdmin, async (req, res, next) => 
       }
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error listing users:', error);
+    logger.error('Admin: Error listing users', { error: error.message, admin: req.user.email });
     next(error);
   }
 });
@@ -132,7 +133,7 @@ router.get('/users/:id', authenticate, requireSuperAdmin, async (req, res, next)
       }
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting user:', error);
+    logger.error('Admin: Error getting user', { error: error.message, admin: req.user.email });
     next(error);
   }
 });
@@ -180,7 +181,7 @@ router.patch('/users/:id',
 
       await user.save();
 
-      console.log(`✅ [ADMIN] Updated user ${user.email} by admin ${req.user.email}`);
+      logger.info('Admin: Updated user', { targetUser: user.email, admin: req.user.email });
 
       res.json({
         success: true,
@@ -198,7 +199,7 @@ router.patch('/users/:id',
         }
       });
     } catch (error) {
-      console.error('❌ [ADMIN] Error updating user:', error);
+      logger.error('Admin: Error updating user', { error: error.message, admin: req.user.email });
       next(error);
     }
   }
@@ -245,7 +246,7 @@ router.post('/users/:id/reset-password',
       user.password_hash = newPasswordHash;
       await user.save();
 
-      console.log(`✅ [ADMIN] Password reset for ${user.email} by admin ${req.user.email}`);
+      logger.info('Admin: Password reset', { targetUser: user.email, admin: req.user.email });
 
       // TODO: Send email notification to user about password reset
 
@@ -254,7 +255,7 @@ router.post('/users/:id/reset-password',
         message: 'Password reset successfully'
       });
     } catch (error) {
-      console.error('❌ [ADMIN] Error resetting password:', error);
+      logger.error('Admin: Error resetting password', { error: error.message, admin: req.user.email });
       next(error);
     }
   }
@@ -286,14 +287,14 @@ router.delete('/users/:id', authenticate, requireSuperAdmin, async (req, res, ne
     const userEmail = user.email;
     await user.destroy();
 
-    console.log(`🗑️  [ADMIN] Deleted user ${userEmail} by admin ${req.user.email}`);
+    logger.warn('Admin: Deleted user', { targetUser: userEmail, admin: req.user.email });
 
     res.json({
       success: true,
       message: 'User deleted successfully'
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error deleting user:', error);
+    logger.error('Admin: Error deleting user', { error: error.message, admin: req.user.email });
     next(error);
   }
 });
@@ -371,7 +372,7 @@ router.get('/stats', authenticate, requireSuperAdmin, async (req, res, next) => 
       }
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting stats:', error);
+    logger.error('Admin: Error getting stats', { error: error.message });
     next(error);
   }
 });
@@ -487,7 +488,7 @@ The Focal Deploy Team
       const sent = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
 
-      console.log(`✅ [ADMIN] Sent ${sent} emails, ${failed} failed`);
+      logger.info('Admin: Bulk email sent', { sent, failed, admin: req.user.email });
 
       res.json({
         success: true,
@@ -500,7 +501,7 @@ The Focal Deploy Team
       });
 
     } catch (error) {
-      console.error('❌ [ADMIN] Error sending email:', error);
+      logger.error('Admin: Error sending email', { error: error.message, admin: req.user.email });
       next(error);
     }
   }
@@ -517,7 +518,7 @@ router.get('/pricing', authenticate, requireSuperAdmin, async (req, res, next) =
       order: [['display_order', 'ASC']]
     });
 
-    console.log(`📊 [ADMIN] Listed ${tiers.length} pricing tiers`);
+    logger.info('Admin: Listed pricing tiers', { count: tiers.length });
 
     res.json({
       success: true,
@@ -542,7 +543,7 @@ router.get('/pricing', authenticate, requireSuperAdmin, async (req, res, next) =
       }))
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error listing pricing tiers:', error);
+    logger.error('Admin: Error listing pricing tiers', { error: error.message });
     next(error);
   }
 });
@@ -585,7 +586,7 @@ router.get('/pricing/:id', authenticate, requireSuperAdmin, async (req, res, nex
       }
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting pricing tier:', error);
+    logger.error('Admin: Error getting pricing tier', { error: error.message });
     next(error);
   }
 });
@@ -667,7 +668,7 @@ router.put('/pricing/:id',
 
       await tier.save();
 
-      console.log(`✅ [ADMIN] Updated pricing tier ${tier.id} by admin ${req.user.email}`);
+      logger.info('Admin: Updated pricing tier', { tierId: tier.id, admin: req.user.email });
 
       res.json({
         success: true,
@@ -691,7 +692,7 @@ router.put('/pricing/:id',
         }
       });
     } catch (error) {
-      console.error('❌ [ADMIN] Error updating pricing tier:', error);
+      logger.error('Admin: Error updating pricing tier', { error: error.message });
       next(error);
     }
   }
@@ -759,7 +760,7 @@ router.post('/pricing',
         billing_options: req.body.billingOptions || ['monthly', 'yearly']
       });
 
-      console.log(`✅ [ADMIN] Created pricing tier ${tier.id} by admin ${req.user.email}`);
+      logger.info('Admin: Created pricing tier', { tierId: tier.id, admin: req.user.email });
 
       res.status(201).json({
         success: true,
@@ -783,7 +784,7 @@ router.post('/pricing',
         }
       });
     } catch (error) {
-      console.error('❌ [ADMIN] Error creating pricing tier:', error);
+      logger.error('Admin: Error creating pricing tier', { error: error.message });
       next(error);
     }
   }
@@ -807,14 +808,14 @@ router.delete('/pricing/:id', authenticate, requireSuperAdmin, async (req, res, 
     const tierId = tier.id;
     await tier.destroy();
 
-    console.log(`🗑️  [ADMIN] Deleted pricing tier ${tierId} by admin ${req.user.email}`);
+    logger.warn('Admin: Deleted pricing tier', { tierId, admin: req.user.email });
 
     res.json({
       success: true,
       message: 'Pricing tier deleted successfully'
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error deleting pricing tier:', error);
+    logger.error('Admin: Error deleting pricing tier', { error: error.message });
     next(error);
   }
 });
@@ -879,7 +880,7 @@ router.get('/storage-stats', authenticate, requireSuperAdmin, async (req, res, n
       };
     });
 
-    console.log(`📊 [ADMIN] Storage stats retrieved: ${users.length} users, ${totalStorageUsedGB.toFixed(2)}GB used`);
+    logger.info('Admin: Storage stats retrieved', { userCount: users.length, totalStorageGB: totalStorageUsedGB.toFixed(2) });
 
     res.json({
       success: true,
@@ -894,7 +895,7 @@ router.get('/storage-stats', authenticate, requireSuperAdmin, async (req, res, n
       users: userStorage
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting storage stats:', error);
+    logger.error('Admin: Error getting storage stats', { error: error.message });
     next(error);
   }
 });
@@ -950,7 +951,7 @@ router.get('/storage-stats/:userId', authenticate, requireSuperAdmin, async (req
       other: totalUsed * 0.01        // 1% other
     };
 
-    console.log(`📊 [ADMIN] Retrieved storage details for user: ${user.email}`);
+    logger.info('Admin: Retrieved storage details', { targetUser: user.email, admin: req.user.email });
 
     res.json({
       success: true,
@@ -969,7 +970,7 @@ router.get('/storage-stats/:userId', authenticate, requireSuperAdmin, async (req
       breakdown
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting user storage details:', error);
+    logger.error('Admin: Error getting user storage details', { error: error.message });
     next(error);
   }
 });
@@ -994,9 +995,9 @@ router.post('/recalculate-storage/:userId', authenticate, requireSuperAdmin, asy
     setImmediate(async () => {
       try {
         await storageManager.calculateUserStorage(user.id);
-        console.log(`✅ [ADMIN] Storage recalculated for user ${user.email}`);
+        logger.info('Admin: Storage recalculated', { targetUser: user.email });
       } catch (error) {
-        console.error(`❌ [ADMIN] Failed to recalculate storage for ${user.email}:`, error);
+        logger.error('Admin: Failed to recalculate storage', { targetUser: user.email, error: error.message });
       }
     });
 
@@ -1005,7 +1006,7 @@ router.post('/recalculate-storage/:userId', authenticate, requireSuperAdmin, asy
       message: 'Storage recalculation started'
     });
   } catch (error) {
-    console.error('❌ [ADMIN] Error starting storage recalculation:', error);
+    logger.error('Admin: Error starting storage recalculation', { error: error.message });
     next(error);
   }
 });

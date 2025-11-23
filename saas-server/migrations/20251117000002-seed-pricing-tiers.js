@@ -7,6 +7,20 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
+    // Check if pricing tiers already exist
+    const [results] = await queryInterface.sequelize.query(
+      'SELECT COUNT(*) as count FROM pricing_tiers'
+    );
+
+    const count = parseInt(results[0].count);
+
+    // Only seed if table is empty
+    if (count > 0) {
+      console.log('⚠️  Pricing tiers already exist, skipping seed...');
+      return;
+    }
+
+    console.log('📦 Seeding pricing tiers...');
     await queryInterface.bulkInsert('pricing_tiers', [
       {
         id: 'starter',

@@ -8,7 +8,7 @@ const ALGORITHM = process.env.ENCRYPTION_ALGORITHM || 'aes-256-gcm';
 const MASTER_KEY = process.env.ENCRYPTION_KEY;
 
 if (!MASTER_KEY) {
-  console.warn('WARNING: ENCRYPTION_KEY not set in environment variables');
+  logger.info('WARNING: ENCRYPTION_KEY not set in environment variables');
 }
 
 /**

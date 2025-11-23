@@ -7,7 +7,11 @@ const express = require('express');
 const axios = require('axios');
 const { generateToken } = require('../middleware/auth');
 const { getModels } = require('../models');
+const logger = require('../utils/logger');
 const { sendWelcomeEmail } = require('../services/emailService');
+const { initializeDatabase } = require('../services/database');
+const EmailSequenceService = require('../services/emailSequenceService');
+const sessionTrackingService = require('../services/sessionTracking');
 
 const router = express.Router();
 
@@ -82,7 +86,7 @@ router.get('/google/callback', async (req, res) => {
           is_active: true
         });
 
-        console.log(`✅ [OAUTH] Linked existing account to Google: ${email}`);
+        logger.info(`[OAUTH] Linked existing account to Google: ${email}`);
       }
     }
 
@@ -101,12 +105,19 @@ router.get('/google/callback', async (req, res) => {
         status: 'active'
       });
 
-      console.log(`✅ [OAUTH] New user created via Google: ${email}`);
+      logger.info(`[OAUTH] New user created via Google: ${email}`);
 
-      // Send welcome email (non-blocking)
-      sendWelcomeEmail(email, name).catch(err =>
-        console.error('Error sending welcome email:', err)
-      );
+      // Schedule email sequence (non-blocking)
+      setImmediate(async () => {
+        try {
+          const sequelize = await initializeDatabase();
+          const emailService = new EmailSequenceService(sequelize);
+          await emailService.scheduleSequence(user.id, email, 'oauth_signup');
+          logger.info('Email sequence scheduled for new OAuth user', { email });
+        } catch (err) {
+          logger.error('Error scheduling email sequence:', err);
+        }
+      });
     }
 
     // Update last login
@@ -121,11 +132,23 @@ router.get('/google/callback', async (req, res) => {
       superAdminFor: user.super_admin_for || []
     });
 
-    // Redirect to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?token=${token}&provider=google`);
+    // Create session
+    await sessionTrackingService.initialize();
+    await sessionTrackingService.createSession(user.id, token, req);
+
+    // Check if user needs to accept terms
+    const needsTerms = !user.eula_accepted;
+
+    // Redirect to frontend with token and terms flag
+    const redirectParams = new URLSearchParams({
+      token,
+      provider: 'google',
+      ...(needsTerms && { needsTerms: 'true' })
+    });
+    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?${redirectParams.toString()}`);
 
   } catch (error) {
-    console.error('❌ [OAUTH] Google OAuth error:', error);
+    logger.error('❌ [OAUTH] Google OAuth error:', error);
     res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
   }
 });
@@ -199,7 +222,7 @@ router.get('/github/callback', async (req, res) => {
     }
 
     if (!userEmail) {
-      console.error('❌ [OAUTH] GitHub account has no email');
+      logger.error('❌ [OAUTH] GitHub account has no email');
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_email`);
     }
 
@@ -226,7 +249,7 @@ router.get('/github/callback', async (req, res) => {
           is_active: true
         });
 
-        console.log(`✅ [OAUTH] Linked existing account to GitHub: ${userEmail}`);
+        logger.info(`[OAUTH] Linked existing account to GitHub: ${userEmail}`);
       }
     }
 
@@ -246,12 +269,19 @@ router.get('/github/callback', async (req, res) => {
         status: 'active'
       });
 
-      console.log(`✅ [OAUTH] New user created via GitHub: ${userEmail}`);
+      logger.info(`[OAUTH] New user created via GitHub: ${userEmail}`);
 
-      // Send welcome email (non-blocking)
-      sendWelcomeEmail(userEmail, name || login).catch(err =>
-        console.error('Error sending welcome email:', err)
-      );
+      // Schedule email sequence (non-blocking)
+      setImmediate(async () => {
+        try {
+          const sequelize = await initializeDatabase();
+          const emailService = new EmailSequenceService(sequelize);
+          await emailService.scheduleSequence(user.id, userEmail, 'oauth_signup');
+          logger.info('Email sequence scheduled for new OAuth user', { email: userEmail });
+        } catch (err) {
+          logger.error('Error scheduling email sequence:', err);
+        }
+      });
     }
 
     // Update last login
@@ -266,11 +296,23 @@ router.get('/github/callback', async (req, res) => {
       superAdminFor: user.super_admin_for || []
     });
 
-    // Redirect to frontend with token
-    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?token=${token}&provider=github`);
+    // Create session
+    await sessionTrackingService.initialize();
+    await sessionTrackingService.createSession(user.id, token, req);
+
+    // Check if user needs to accept terms
+    const needsTerms = !user.eula_accepted;
+
+    // Redirect to frontend with token and terms flag
+    const redirectParams = new URLSearchParams({
+      token,
+      provider: 'github',
+      ...(needsTerms && { needsTerms: 'true' })
+    });
+    res.redirect(`${process.env.FRONTEND_URL}/oauth-callback?${redirectParams.toString()}`);
 
   } catch (error) {
-    console.error('❌ [OAUTH] GitHub OAuth error:', error);
+    logger.error('❌ [OAUTH] GitHub OAuth error:', error);
     res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
   }
 });

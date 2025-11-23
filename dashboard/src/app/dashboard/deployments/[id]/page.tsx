@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Server,
   Activity,
@@ -19,7 +20,8 @@ import {
   Shield,
   Database,
   Trash2,
-  Rocket
+  Rocket,
+  Download
 } from 'lucide-react';
 import { deploymentsAPI } from '@/lib/api';
 import MetricsDashboard from '@/components/MetricsDashboard';
@@ -35,7 +37,7 @@ interface DeploymentLog {
 interface Deployment {
   id: string;
   projectName: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'terminated';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'terminated' | 'cancelled';
   instanceId: string | null;
   region: string;
   instanceType: string;
@@ -71,6 +73,7 @@ export default function DeploymentDetailPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [appControlLoading, setAppControlLoading] = useState<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch deployment details
@@ -80,7 +83,7 @@ export default function DeploymentDetailPage() {
       setDeployment(response.data.deployment);
 
       // Disable auto-refresh if deployment is in terminal state
-      if (['completed', 'failed', 'terminated'].includes(response.data.deployment.status)) {
+      if (['completed', 'failed', 'terminated', 'cancelled'].includes(response.data.deployment.status)) {
         setAutoRefresh(false);
       }
     } catch (err: any) {
@@ -101,6 +104,36 @@ export default function DeploymentDetailPage() {
       }, 100);
     } catch (err: any) {
       console.error('Failed to fetch logs:', err);
+    }
+  };
+
+  // Application control handlers
+  const handleAppControl = async (action: 'restart' | 'stop' | 'start') => {
+    if (!confirm(`Are you sure you want to ${action} the application?`)) return;
+
+    setAppControlLoading(action);
+    try {
+      const response = await fetch(`/api/app-controls/${deploymentId}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`Application ${action}ed successfully!`);
+        fetchDeployment();
+      } else {
+        alert(`Failed to ${action} application: ${data.message || data.error}`);
+      }
+    } catch (error: any) {
+      console.error(`Failed to ${action} application:`, error);
+      alert(`Failed to ${action} application: ${error.message}`);
+    } finally {
+      setAppControlLoading(null);
     }
   };
 
@@ -128,6 +161,59 @@ export default function DeploymentDetailPage() {
       alert(err.response?.data?.message || 'Failed to delete deployment');
       setDeleting(false);
       setShowDeleteModal(false);
+    }
+  };
+
+  // Handle SSH key download
+  const handleDownloadSSHKey = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.focuswithfocal.io';
+      const token = localStorage.getItem('focal_auth_token');
+
+      if (!token) {
+        alert('Authentication token not found. Please log in again.');
+        return;
+      }
+
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = `${apiUrl}/api/ssh-keys/${deploymentId}/download`;
+      link.setAttribute('download', ''); // This hints that it should be downloaded
+
+      // Fetch with proper authorization header
+      const response = await fetch(`${apiUrl}/api/ssh-keys/${deploymentId}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download SSH key');
+      }
+
+      // Get the filename from Content-Disposition header if available
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `deployment-${deploymentId}.pem`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Failed to download SSH key:', err);
+      alert(err.message || 'Failed to download SSH key');
     }
   };
 
@@ -160,6 +246,8 @@ export default function DeploymentDetailPage() {
         return 'text-green-600 bg-green-50 border-green-200';
       case 'failed':
         return 'text-red-600 bg-red-50 border-red-200';
+      case 'cancelled':
+        return 'text-orange-600 bg-orange-50 border-orange-200';
       case 'running':
         return 'text-blue-600 bg-blue-50 border-blue-200';
       case 'pending':
@@ -177,6 +265,8 @@ export default function DeploymentDetailPage() {
         return <CheckCircle className="w-5 h-5" />;
       case 'failed':
         return <XCircle className="w-5 h-5" />;
+      case 'cancelled':
+        return <StopCircle className="w-5 h-5" />;
       case 'running':
         return <Activity className="w-5 h-5 animate-pulse" />;
       case 'pending':
@@ -258,23 +348,24 @@ export default function DeploymentDetailPage() {
           Back to Deployments
         </button>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {deployment.projectName}
-            </h1>
-            <div className="flex items-center gap-3">
-              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(deployment.status)}`}>
-                {getStatusIcon(deployment.status)}
-                {deployment.status.charAt(0).toUpperCase() + deployment.status.slice(1)}
-              </span>
-              <span className="text-sm text-gray-500">
-                {deployment.region} • {deployment.instanceType}
-              </span>
-            </div>
-          </div>
-
+        {/* Deployment Name */}
+        <div className="mb-4">
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            {deployment.projectName}
+          </h1>
           <div className="flex items-center gap-3">
+            <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(deployment.status)}`}>
+              {getStatusIcon(deployment.status)}
+              {deployment.status.charAt(0).toUpperCase() + deployment.status.slice(1)}
+            </span>
+            <span className="text-sm text-gray-500">
+              {deployment.region} • {deployment.instanceType}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 flex-wrap mb-6">
             <button
               onClick={() => {
                 fetchDeployment();
@@ -286,11 +377,81 @@ export default function DeploymentDetailPage() {
               Refresh
             </button>
 
+            {/* Terminal and SSL buttons - only show for completed deployments with instances */}
+            {deployment.status === 'completed' && deployment.publicIp && (
+              <>
+                <Link
+                  href={`/dashboard/deployments/${deploymentId}/terminal`}
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors inline-flex items-center gap-2"
+                  title="Open SSH Terminal"
+                >
+                  <Terminal className="w-4 h-4" />
+                  Terminal
+                </Link>
+
+                <Link
+                  href={`/dashboard/deployments/${deploymentId}/ssl`}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors inline-flex items-center gap-2"
+                  title="Manage SSL Certificate"
+                >
+                  <Shield className="w-4 h-4" />
+                  SSL
+                </Link>
+              </>
+            )}
+
+            {/* Application Controls - only show for completed deployments with instances */}
+            {deployment.status === 'completed' && deployment.publicIp && (
+              <>
+                <button
+                  onClick={() => handleAppControl('restart')}
+                  disabled={appControlLoading !== null}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Restart application"
+                >
+                  {appControlLoading === 'restart' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Restart App
+                </button>
+
+                <button
+                  onClick={() => handleAppControl('stop')}
+                  disabled={appControlLoading !== null}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Stop application"
+                >
+                  {appControlLoading === 'stop' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <StopCircle className="w-4 h-4" />
+                  )}
+                  Stop App
+                </button>
+
+                <button
+                  onClick={() => handleAppControl('start')}
+                  disabled={appControlLoading !== null}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Start application"
+                >
+                  {appControlLoading === 'start' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  Start App
+                </button>
+              </>
+            )}
+
             {/* Deploy Application Button - only show for completed deployments */}
             {deployment.status === 'completed' && (
               <button
                 onClick={() => router.push(`/dashboard/deployments/${deploymentId}/deploy`)}
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all inline-flex items-center gap-2 font-semibold"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-opacity-90 transition-all inline-flex items-center gap-2 font-semibold"
                 title="Deploy your application to this server"
               >
                 <Rocket className="w-4 h-4" />
@@ -298,7 +459,66 @@ export default function DeploymentDetailPage() {
               </button>
             )}
 
-            {/* Delete Button - only show for completed/failed/terminated deployments */}
+            {/* View Live Progress - for running/pending deployments */}
+            {(deployment.status === 'running' || deployment.status === 'pending') && (
+              <>
+                <Link
+                  href={`/dashboard/deployments/${deploymentId}/live`}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all inline-flex items-center gap-2 font-semibold animate-pulse"
+                >
+                  <Activity className="w-4 h-4" />
+                  View Live Progress
+                </Link>
+
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to cancel this deployment? This cannot be undone.')) return;
+                    try {
+                      const response = await deploymentsAPI.cancel(deploymentId);
+                      if (response.data.success) {
+                        alert('Deployment cancelled successfully!');
+                        fetchDeployment();
+                        fetchLogs();
+                      }
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Failed to cancel deployment');
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all inline-flex items-center gap-2 font-semibold"
+                  title="Cancel this deployment"
+                >
+                  <StopCircle className="w-4 h-4" />
+                  Cancel Deployment
+                </button>
+              </>
+            )}
+
+            {/* Retry/Resume Button - only show for failed or cancelled deployments */}
+            {(deployment.status === 'failed' || deployment.status === 'cancelled') && (
+              <button
+                onClick={async () => {
+                  if (!confirm('Would you like to retry this deployment? The system will attempt to resume from where it failed.')) return;
+                  try {
+                    const response = await deploymentsAPI.retry(deploymentId);
+                    if (response.data.success) {
+                      alert('Deployment retry initiated! The page will refresh to show progress.');
+                      setAutoRefresh(true);
+                      fetchDeployment();
+                      fetchLogs();
+                    }
+                  } catch (err: any) {
+                    alert(err.response?.data?.message || 'Failed to retry deployment');
+                  }
+                }}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-all inline-flex items-center gap-2 font-semibold"
+                title="Retry deployment from where it failed"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry Deployment
+              </button>
+            )}
+
+            {/* Delete Button - only show for completed/failed/terminated/cancelled deployments */}
             {deployment.status !== 'running' && deployment.status !== 'pending' && (
               <button
                 onClick={() => setShowDeleteModal(true)}
@@ -309,7 +529,6 @@ export default function DeploymentDetailPage() {
                 Delete
               </button>
             )}
-          </div>
         </div>
       </div>
 
@@ -377,7 +596,7 @@ export default function DeploymentDetailPage() {
 
       {/* SSH Connection Info */}
       {deployment.status === 'completed' && deployment.connectionInfo && deployment.publicIp && (
-        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <Terminal className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-gray-900">Connection Information</h2>
@@ -447,13 +666,25 @@ export default function DeploymentDetailPage() {
 
             {/* Username & Port */}
             <div className="bg-white rounded-lg p-4 border border-blue-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Server className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Connection Details</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Server className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium text-gray-700">Connection Details</span>
+                </div>
+                {deployment.status === 'completed' && (
+                  <button
+                    onClick={handleDownloadSSHKey}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    title="Download SSH private key"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download SSH Key
+                  </button>
+                )}
               </div>
               <div className="text-sm text-gray-900 space-y-1">
-                <div><span className="text-gray-600">Username:</span> <code className="font-mono">{deployment.connectionInfo.username}</code></div>
-                <div><span className="text-gray-600">Port:</span> <code className="font-mono">{deployment.connectionInfo.port}</code></div>
+                <div><span className="text-gray-600">Username:</span> <code className="font-mono">{deployment.configuration?.deploymentUsername || deployment.connectionInfo?.username || 'ubuntu'}</code></div>
+                <div><span className="text-gray-600">Port:</span> <code className="font-mono">{deployment.configuration?.sshPort || deployment.connectionInfo?.port || 22}</code></div>
               </div>
             </div>
 

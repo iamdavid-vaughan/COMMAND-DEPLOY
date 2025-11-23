@@ -9,10 +9,25 @@ const { getModels } = require('../models');
 const { DeploymentBridge } = require('./deploymentBridge');
 const { terminateDeployment } = require('./ec2');
 const { terminateDeploymentComplete } = require('./ec2Enhanced');
+const azureService = require('./azure');
+const { decrypt } = require('./encryption');
+const { decryptData } = require('./encryption');
 const { sendDeploymentStartedEmail, sendDeploymentSuccessEmail, sendDeploymentFailedEmail } = require('./email');
+const logger = require('../utils/logger');
+const cache = require('../utils/cache');
+const storageManager = require('./storageManager');
+const fs = require('fs-extra');
+
+// Import WebSocket service
+let websocketService = null;
+try {
+  websocketService = require('./websocket');
+} catch (error) {
+  logger.warn('WebSocket service not available', { error: error.message });
+}
 
 /**
- * Add log entry for deployment
+ * Add log entry for deployment and emit via WebSocket
  */
 async function addLog(deploymentId, level, message, metadata = {}) {
   const { DeploymentLog } = getModels();
@@ -23,8 +38,311 @@ async function addLog(deploymentId, level, message, metadata = {}) {
       message,
       metadata,
     });
+
+    // Emit log via WebSocket if available
+    if (websocketService && websocketService.emitDeploymentLog) {
+      websocketService.emitDeploymentLog(deploymentId, {
+        level,
+        message,
+        metadata,
+        timestamp: new Date()
+      });
+    }
   } catch (error) {
-    console.error(`❌ [WORKER] Failed to add log for ${deploymentId}:`, error.message);
+    logger.error('Worker: Failed to add deployment log', { deploymentId, error: error.message });
+  }
+}
+
+/**
+ * Upload deployment logs and artifacts to S3
+ * This preserves deployment history in user's S3 storage
+ */
+async function uploadDeploymentArtifactsToS3(deploymentId, userId, projectPath = null) {
+  try {
+    logger.info('Worker: Uploading deployment artifacts to S3', { deploymentId, userId });
+
+    const { DeploymentLog, Deployment } = getModels();
+
+    // 1. Export all deployment logs to JSON
+    const logs = await DeploymentLog.findAll({
+      where: { deployment_id: deploymentId },
+      order: [['created_at', 'ASC']],
+      raw: true
+    });
+
+    const logsJson = JSON.stringify(logs, null, 2);
+    const logsFileName = `deployment-logs-${Date.now()}.json`;
+
+    // Upload logs to S3
+    await storageManager.uploadFile(
+      userId,
+      deploymentId,
+      logsFileName,
+      Buffer.from(logsJson, 'utf8'),
+      'application/json'
+    );
+
+    logger.info('Worker: Uploaded deployment logs to S3', {
+      deploymentId,
+      fileName: logsFileName,
+      logCount: logs.length
+    });
+
+    // 2. Upload deployment state file if it exists
+    if (projectPath) {
+      const stateFilePath = `${projectPath}/.focal-deploy/deployment/deployment-state.json`;
+
+      if (await fs.pathExists(stateFilePath)) {
+        const stateContent = await fs.readFile(stateFilePath, 'utf8');
+        const stateFileName = `deployment-state-${Date.now()}.json`;
+
+        await storageManager.uploadFile(
+          userId,
+          deploymentId,
+          stateFileName,
+          Buffer.from(stateContent, 'utf8'),
+          'application/json'
+        );
+
+        logger.info('Worker: Uploaded deployment state to S3', {
+          deploymentId,
+          fileName: stateFileName
+        });
+      }
+    }
+
+    // 3. Create a summary file with deployment metadata
+    const deployment = await Deployment.findByPk(deploymentId, { raw: true });
+    const summary = {
+      deploymentId: deploymentId,
+      projectName: deployment.project_name,
+      status: deployment.status,
+      instanceId: deployment.instance_id,
+      publicIp: deployment.public_ip,
+      region: deployment.region,
+      instanceType: deployment.instance_type,
+      createdAt: deployment.created_at,
+      completedAt: deployment.completed_at,
+      configuration: deployment.configuration,
+      logCount: logs.length,
+      exportedAt: new Date().toISOString()
+    };
+
+    const summaryJson = JSON.stringify(summary, null, 2);
+    const summaryFileName = `deployment-summary-${Date.now()}.json`;
+
+    await storageManager.uploadFile(
+      userId,
+      deploymentId,
+      summaryFileName,
+      Buffer.from(summaryJson, 'utf8'),
+      'application/json'
+    );
+
+    logger.info('Worker: Uploaded deployment summary to S3', {
+      deploymentId,
+      fileName: summaryFileName
+    });
+
+    // Update deployment record with S3 upload status
+    await Deployment.update({
+      configuration: {
+        ...deployment.configuration,
+        s3Artifacts: {
+          uploaded: true,
+          uploadedAt: new Date().toISOString(),
+          files: [logsFileName, summaryFileName]
+        }
+      }
+    }, {
+      where: { id: deploymentId }
+    });
+
+    return {
+      success: true,
+      filesUploaded: [logsFileName, summaryFileName],
+      logCount: logs.length
+    };
+
+  } catch (error) {
+    logger.error('Worker: Failed to upload deployment artifacts to S3', {
+      deploymentId,
+      error: error.message,
+      stack: error.stack
+    });
+
+    // Non-fatal - don't throw, just log the error
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Process Azure deployment
+ */
+async function processAzureDeployment(deploymentId, deployment, user) {
+  const { AzureCredential } = getModels();
+
+  try {
+    logger.info('Worker: Processing Azure deployment', { deploymentId });
+    await addLog(deploymentId, 'info', 'Fetching Azure credentials...');
+
+    // Get user's Azure credentials
+    const azureCredential = await AzureCredential.findOne({
+      where: { user_id: deployment.user_id, is_default: true }
+    });
+
+    if (!azureCredential) {
+      throw new Error('Azure credentials not found. Please add Azure credentials in the Credentials section.');
+    }
+
+    // Decrypt client secret
+    const clientSecret = decryptData(azureCredential.client_secret);
+
+    const azureCredentials = {
+      subscriptionId: azureCredential.subscription_id,
+      tenantId: azureCredential.tenant_id,
+      clientId: azureCredential.client_id,
+      clientSecret: clientSecret,
+      resourceGroup: azureCredential.resource_group
+    };
+
+    await addLog(deploymentId, 'info', `Using Azure subscription: ${azureCredential.subscription_id.substring(0, 8)}...`);
+    await addLog(deploymentId, 'info', 'Creating Azure VM...');
+
+    // Create Azure deployment
+    const result = await azureService.createDeployment(azureCredentials, {
+      region: deployment.region,
+      instanceType: deployment.instance_type,
+      projectName: deployment.project_name,
+      domains: deployment.domains || [],
+      configuration: deployment.configuration || {}
+    });
+
+    logger.info('Worker: Azure VM created successfully', { deploymentId, result });
+
+    await addLog(deploymentId, 'success', `Azure VM created: ${result.vmName}`);
+    await addLog(deploymentId, 'success', `Public IP: ${result.publicIp}`);
+    await addLog(deploymentId, 'success', `Resource Group: ${result.resourceGroup}`);
+    await addLog(deploymentId, 'success', `Region: ${result.region}`);
+    await addLog(deploymentId, 'success', `Virtual Network: ${result.vnetName}`);
+    await addLog(deploymentId, 'success', `Network Security Group: ${result.nsgName}`);
+
+    // Update deployment with results
+    await deployment.update({
+      status: 'completed',
+      instance_id: result.vmId,
+      public_ip: result.publicIp,
+      completed_at: new Date(),
+      error_message: null,
+      configuration: {
+        ...deployment.configuration,
+        azureVmName: result.vmName,
+        azureResourceGroup: result.resourceGroup,
+        azureVnetName: result.vnetName,
+        azureNsgName: result.nsgName
+      }
+    });
+
+    await addLog(deploymentId, 'success', 'Azure deployment completed successfully!');
+    await addLog(deploymentId, 'info', `Server ready at: ${result.publicIp}`);
+
+    // Emit completion via WebSocket
+    if (websocketService && websocketService.emitDeploymentComplete) {
+      websocketService.emitDeploymentComplete(deploymentId, {
+        status: 'completed',
+        vmId: result.vmId,
+        vmName: result.vmName,
+        publicIp: result.publicIp,
+        resourceGroup: result.resourceGroup
+      });
+    }
+    if (websocketService && websocketService.emitDeploymentStatus) {
+      websocketService.emitDeploymentStatus(deploymentId, 'completed');
+    }
+
+    logger.info('Worker: Azure deployment completed successfully', {
+      deploymentId,
+      vmId: result.vmId,
+      vmName: result.vmName,
+      publicIp: result.publicIp,
+      resourceGroup: result.resourceGroup
+    });
+
+    // Send deployment success email
+    if (user && user.email) {
+      try {
+        await sendDeploymentSuccessEmail(user.email, user.name || user.email, {
+          id: deploymentId,
+          projectName: deployment.project_name,
+          publicIp: result.publicIp,
+          instanceId: result.vmId,
+          domains: deployment.domains || []
+        });
+      } catch (emailError) {
+        logger.warn('Worker: Failed to send deployment success email', { deploymentId, error: emailError.message });
+      }
+    }
+
+    // Upload deployment logs and artifacts to S3
+    await addLog(deploymentId, 'info', '📤 Uploading deployment logs and artifacts to S3...');
+    const uploadResult = await uploadDeploymentArtifactsToS3(deploymentId, deployment.user_id, null);
+    if (uploadResult.success) {
+      await addLog(deploymentId, 'success', `Uploaded ${uploadResult.filesUploaded.length} files to S3 (${uploadResult.logCount} log entries)`);
+    } else {
+      await addLog(deploymentId, 'warning', `Failed to upload artifacts to S3: ${uploadResult.error}`);
+    }
+
+  } catch (error) {
+    logger.error('Worker: Azure deployment failed', { deploymentId, error: error.message, stack: error.stack });
+    await addLog(deploymentId, 'error', `Azure deployment failed: ${error.message}`);
+
+    await deployment.update({
+      status: 'failed',
+      error_message: error.message,
+      completed_at: new Date()
+    });
+
+    // Emit error via WebSocket
+    if (websocketService) {
+      if (websocketService.emitDeploymentError) {
+        websocketService.emitDeploymentError(deploymentId, error);
+      }
+      if (websocketService.emitDeploymentStatus) {
+        websocketService.emitDeploymentStatus(deploymentId, 'failed');
+      }
+    }
+
+    // Send deployment failed email
+    if (user && user.email) {
+      try {
+        await sendDeploymentFailedEmail(user.email, user.name || user.email, {
+          id: deploymentId,
+          projectName: deployment.project_name,
+          region: deployment.region,
+          instanceType: deployment.instance_type,
+          errorMessage: error.message
+        });
+      } catch (emailError) {
+        logger.warn('Worker: Failed to send deployment failed email', { deploymentId, error: emailError.message });
+      }
+    }
+
+    // Upload deployment logs and artifacts to S3 (even for failed deployments)
+    await addLog(deploymentId, 'info', '📤 Uploading deployment logs and artifacts to S3...');
+    const uploadResult = await uploadDeploymentArtifactsToS3(deploymentId, deployment.user_id, null);
+    if (uploadResult.success) {
+      await addLog(deploymentId, 'success', `Uploaded ${uploadResult.filesUploaded.length} files to S3 (${uploadResult.logCount} log entries)`);
+    } else {
+      logger.warn('Worker: Failed to upload artifacts to S3 for failed Azure deployment', {
+        deploymentId,
+        error: uploadResult.error
+      });
+    }
+
+    throw error;
   }
 }
 
@@ -45,18 +363,18 @@ async function processDeployment(deploymentId) {
     const deployment = await Deployment.findByPk(deploymentId);
 
     if (!deployment) {
-      console.error(`❌ [WORKER] Deployment not found: ${deploymentId}`);
+      logger.error('Worker: Deployment not found', { deploymentId });
       return;
     }
 
     if (deployment.status !== 'pending') {
-      console.log(`⏭️  [WORKER] Deployment ${deploymentId} is not pending (status: ${deployment.status}), skipping`);
+      logger.info('Worker: Deployment not pending, skipping', { deploymentId, status: deployment.status });
       return;
     }
 
     // Check if deployment was cancelled before we even started
     if (deployment.cancelled_by_user) {
-      console.log(`🚫 [WORKER] Deployment ${deploymentId} was cancelled by user before starting`);
+      logger.info('Worker: Deployment cancelled before starting', { deploymentId });
       await deployment.update({
         status: 'cancelled',
         completed_at: new Date(),
@@ -66,15 +384,27 @@ async function processDeployment(deploymentId) {
       return;
     }
 
-    console.log(`🚀 [WORKER] Processing deployment: ${deploymentId} (${deployment.project_name})`);
+    logger.info('Worker: Processing deployment', { deploymentId, projectName: deployment.project_name });
     await addLog(deploymentId, 'info', `Starting deployment for project: ${deployment.project_name}`);
+
+    // Detect provider from configuration
+    const provider = deployment.configuration?.provider || 'aws';
+    logger.info('Worker: Detected provider', { deploymentId, provider });
+    await addLog(deploymentId, 'info', `Cloud provider: ${provider.toUpperCase()}`);
 
     // Update status to running
     await deployment.update({
       status: 'running',
       started_at: new Date(),
     });
+    // Invalidate cache so UI shows updated status
+    await cache.delPattern(`deployments:list:${deployment.user_id}:*`);
     await addLog(deploymentId, 'info', 'Deployment status updated to running');
+
+    // Emit status update via WebSocket
+    if (websocketService && websocketService.emitDeploymentStatus) {
+      websocketService.emitDeploymentStatus(deploymentId, 'running');
+    }
 
     // Send deployment started email
     const { User } = getModels();
@@ -88,12 +418,19 @@ async function processDeployment(deploymentId) {
           instanceType: deployment.instance_type
         });
       } catch (emailError) {
-        console.error(`⚠️  [WORKER] Failed to send deployment started email:`, emailError.message);
+        logger.warn('Worker: Failed to send deployment started email', { deploymentId, error: emailError.message });
         // Don't fail deployment if email fails
       }
     }
 
-    // Execute deployment using CLI deployment executor via bridge
+    // Route to appropriate deployment service based on provider
+    if (provider === 'azure') {
+      // Process Azure deployment
+      await processAzureDeployment(deploymentId, deployment, user);
+      return { success: true, deploymentId };
+    }
+
+    // Default: Execute AWS deployment using CLI deployment executor via bridge
     await addLog(deploymentId, 'info', 'Executing deployment using CLI deployment executor...');
 
     // The bridge handles:
@@ -103,19 +440,61 @@ async function processDeployment(deploymentId) {
     // 4. Creating EC2 + S3 + Security Groups + SSH hardening + DNS + SSL + Application
 
     // Stream CLI output to deployment logs in real-time
-    // Also check for cancellation every 10 log messages
+    // Also check for cancellation and monitor infrastructure completion
     let logCount = 0;
+    let infrastructureSaved = false;
     const logCallback = async (level, message) => {
       await addLog(deploymentId, level, message);
 
-      // Check for cancellation every 10 log messages to avoid excessive DB queries
+      // Check for cancellation every 5 log messages (more responsive than 10)
       logCount++;
-      if (logCount % 10 === 0) {
+      if (logCount % 5 === 0) {
         const currentDeployment = await Deployment.findByPk(deploymentId);
         if (currentDeployment && currentDeployment.cancelled_by_user) {
-          console.log(`🚫 [WORKER] Deployment ${deploymentId} cancelled by user during execution`);
+          logger.info('Worker: Deployment cancelled during execution', { deploymentId });
           await addLog(deploymentId, 'warning', 'Deployment cancelled by user');
           throw new Error('Deployment cancelled by user');
+        }
+      }
+
+      // Monitor for infrastructure phase completion and save instance info immediately
+      if (!infrastructureSaved && projectPath) {
+        try {
+          const stateFilePath = `${projectPath}/.focal-deploy/deployment/deployment-state.json`;
+          if (await fs.pathExists(stateFilePath)) {
+            const state = await fs.readJson(stateFilePath);
+
+            // Check if infrastructure phase completed
+            if (state.completedPhases && state.completedPhases.includes('infrastructure')) {
+              const infraResult = state.deploymentResults?.infrastructure;
+
+              if (infraResult && (infraResult.instanceId || infraResult.publicIpAddress)) {
+                const instanceId = infraResult.instanceId;
+                const publicIp = infraResult.publicIpAddress || infraResult.publicIp;
+
+                // Save to database immediately
+                await deployment.update({
+                  ...(instanceId && { instance_id: instanceId }),
+                  ...(publicIp && { public_ip: publicIp }),
+                });
+                await cache.delPattern(`deployments:list:${deployment.user_id}:*`);
+
+                logger.info('Worker: Saved infrastructure info immediately after phase completion', {
+                  deploymentId,
+                  instanceId,
+                  publicIp
+                });
+
+                infrastructureSaved = true;
+              }
+            }
+          }
+        } catch (error) {
+          // Non-fatal - log but continue
+          logger.warn('Worker: Could not check infrastructure state', {
+            deploymentId,
+            error: error.message
+          });
         }
       }
     };
@@ -140,6 +519,17 @@ async function processDeployment(deploymentId) {
     const publicIp = infrastructurePhase.publicIpAddress || infrastructurePhase.publicIp;
     const sshPort = deployment.configuration.sshPort || 2847;
 
+    // CRITICAL: Update database immediately with infrastructure info
+    // This ensures the info is saved even if deployment is cancelled later
+    if (instanceId || publicIp) {
+      await deployment.update({
+        ...(instanceId && { instance_id: instanceId }),
+        ...(publicIp && { public_ip: publicIp }),
+      });
+      await cache.delPattern(`deployments:list:${deployment.user_id}:*`);
+      logger.info('Worker: Updated database with infrastructure info', { deploymentId, instanceId, publicIp });
+    }
+
     await addLog(deploymentId, 'success', `EC2 instance created: ${instanceId}`);
     await addLog(deploymentId, 'success', `Public IP: ${publicIp}`);
     await addLog(deploymentId, 'success', `S3 bucket created: ${infrastructurePhase.s3BucketName || 'auto-generated'}`);
@@ -162,20 +552,75 @@ async function processDeployment(deploymentId) {
       completed_at: new Date(),
       error_message: null,
     });
+    // Invalidate cache so UI shows completed status
+    await cache.delPattern(`deployments:list:${deployment.user_id}:*`);
 
     await addLog(deploymentId, 'success', 'Deployment completed successfully!');
     await addLog(deploymentId, 'info', `Server ready at: ${publicIp}`);
+
+    // Emit completion via WebSocket
+    if (websocketService && websocketService.emitDeploymentComplete) {
+      websocketService.emitDeploymentComplete(deploymentId, {
+        status: 'completed',
+        instanceId,
+        publicIp,
+        s3Bucket: infrastructurePhase.s3BucketName,
+        domain: deployment.configuration.primaryDomain
+      });
+    }
+    if (websocketService && websocketService.emitDeploymentStatus) {
+      websocketService.emitDeploymentStatus(deploymentId, 'completed');
+    }
 
     if (deployment.configuration.primaryDomain) {
       const protocol = deployment.configuration.enableSsl ? 'https' : 'http';
       await addLog(deploymentId, 'info', `Domain: ${protocol}://${deployment.configuration.primaryDomain}`);
     }
 
-    console.log(`✅ [WORKER] Deployment completed: ${deploymentId}`);
-    console.log(`   Instance ID: ${instanceId}`);
-    console.log(`   Public IP: ${publicIp}`);
-    console.log(`   S3 Bucket: ${infrastructurePhase.s3BucketName || 'auto-generated'}`);
-    console.log(`   SSH Port: ${sshPort}`);
+    logger.info('Worker: Deployment completed successfully', {
+      deploymentId,
+      instanceId,
+      publicIp,
+      s3Bucket: infrastructurePhase.s3BucketName || 'auto-generated',
+      sshPort
+    });
+
+    // Track resource usage for billing
+    const { UsageTracking } = getModels();
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    // Track EC2 instance creation
+    if (instanceId) {
+      await UsageTracking.create({
+        user_id: deployment.user_id,
+        resource_type: 'ec2_instance',
+        action: 'create',
+        quantity: 1,
+        metadata: {
+          deployment_id: deploymentId,
+          instance_id: instanceId,
+          instance_type: deployment.instance_type,
+          region: deployment.region
+        },
+        billing_period: currentMonth
+      });
+    }
+
+    // Track S3 bucket creation
+    if (infrastructurePhase.s3BucketName) {
+      await UsageTracking.create({
+        user_id: deployment.user_id,
+        resource_type: 's3_bucket',
+        action: 'create',
+        quantity: 1,
+        metadata: {
+          deployment_id: deploymentId,
+          bucket_name: infrastructurePhase.s3BucketName,
+          region: deployment.region
+        },
+        billing_period: currentMonth
+      });
+    }
 
     // Send deployment success email
     if (user && user.email) {
@@ -188,9 +633,18 @@ async function processDeployment(deploymentId) {
           domains: deployment.configuration.domains || []
         });
       } catch (emailError) {
-        console.error(`⚠️  [WORKER] Failed to send deployment success email:`, emailError.message);
+        logger.warn('Worker: Failed to send deployment success email', { deploymentId, error: emailError.message });
         // Don't fail deployment if email fails
       }
+    }
+
+    // Upload deployment logs and artifacts to S3
+    await addLog(deploymentId, 'info', '📤 Uploading deployment logs and artifacts to S3...');
+    const uploadResult = await uploadDeploymentArtifactsToS3(deploymentId, deployment.user_id, projectPath);
+    if (uploadResult.success) {
+      await addLog(deploymentId, 'success', `Uploaded ${uploadResult.filesUploaded.length} files to S3 (${uploadResult.logCount} log entries)`);
+    } else {
+      await addLog(deploymentId, 'warning', `Failed to upload artifacts to S3: ${uploadResult.error}`);
     }
 
     // Clean up temporary project directory
@@ -206,10 +660,10 @@ async function processDeployment(deploymentId) {
     const isCancelled = error.message.includes('cancelled by user');
 
     if (isCancelled) {
-      console.log(`🚫 [WORKER] Deployment cancelled: ${deploymentId}`);
+      logger.info('Worker: Deployment cancelled', { deploymentId });
       await addLog(deploymentId, 'warning', 'Deployment cancelled by user');
     } else {
-      console.error(`❌ [WORKER] Deployment failed: ${deploymentId}`, error);
+      logger.error('Worker: Deployment failed', { deploymentId, error: error.message, stack: error.stack });
       await addLog(deploymentId, 'error', `Deployment failed: ${error.message}`);
     }
 
@@ -218,15 +672,49 @@ async function processDeployment(deploymentId) {
       await bridge.cleanupProjectDirectory(projectPath);
     }
 
-    // Update deployment status
+    // Update deployment status - also save any partial infrastructure info
     const { Deployment, User } = getModels();
     const deployment = await Deployment.findByPk(deploymentId);
     if (deployment) {
+      const finalStatus = isCancelled ? 'cancelled' : 'failed';
+
+      // Try to extract any infrastructure info that may have been created before failure
+      // This ensures EC2 instances are tracked even when later phases fail
+      let instanceId = deployment.instance_id;
+      let publicIp = deployment.public_ip;
+
+      // Check if error contains infrastructure info (bridge may pass it in error)
+      if (error.infrastructureInfo) {
+        instanceId = error.infrastructureInfo.instanceId || instanceId;
+        publicIp = error.infrastructureInfo.publicIp || publicIp;
+      }
+
+      // Also check the bridge's last known state if available
+      if (bridge.lastInfrastructureResult) {
+        instanceId = bridge.lastInfrastructureResult.instanceId || instanceId;
+        publicIp = bridge.lastInfrastructureResult.publicIp || bridge.lastInfrastructureResult.publicIpAddress || publicIp;
+      }
+
       await deployment.update({
-        status: isCancelled ? 'cancelled' : 'failed',
+        status: finalStatus,
         error_message: error.message,
         completed_at: new Date(),
+        // Preserve any infrastructure that was created before failure
+        ...(instanceId && { instance_id: instanceId }),
+        ...(publicIp && { public_ip: publicIp }),
       });
+      // Invalidate cache so UI shows failed/cancelled status
+      await cache.delPattern(`deployments:list:${deployment.user_id}:*`);
+
+      // Emit error/cancellation via WebSocket
+      if (websocketService) {
+        if (websocketService.emitDeploymentError && !isCancelled) {
+          websocketService.emitDeploymentError(deploymentId, error);
+        }
+        if (websocketService.emitDeploymentStatus) {
+          websocketService.emitDeploymentStatus(deploymentId, finalStatus);
+        }
+      }
 
       // Send deployment failed email (but not for cancelled deployments)
       if (!isCancelled) {
@@ -241,10 +729,23 @@ async function processDeployment(deploymentId) {
               errorMessage: error.message
             });
           } catch (emailError) {
-            console.error(`⚠️  [WORKER] Failed to send deployment failed email:`, emailError.message);
+            logger.warn('Worker: Failed to send deployment failed email', { deploymentId, error: emailError.message });
             // Don't throw - email failure shouldn't cause additional issues
           }
         }
+      }
+
+      // Upload deployment logs and artifacts to S3 (even for failed/cancelled deployments)
+      await addLog(deploymentId, 'info', '📤 Uploading deployment logs and artifacts to S3...');
+      const uploadResult = await uploadDeploymentArtifactsToS3(deploymentId, deployment.user_id, projectPath);
+      if (uploadResult.success) {
+        await addLog(deploymentId, 'success', `Uploaded ${uploadResult.filesUploaded.length} files to S3 (${uploadResult.logCount} log entries)`);
+      } else {
+        // Log but don't throw - S3 upload failure shouldn't mask the original deployment failure
+        logger.warn('Worker: Failed to upload artifacts to S3 for failed deployment', {
+          deploymentId,
+          error: uploadResult.error
+        });
       }
     }
 
@@ -261,19 +762,19 @@ async function processDeployment(deploymentId) {
  * Process deployment termination
  */
 async function processTermination(deploymentId) {
-  const { Deployment, EncryptedCredential } = getModels();
+  const { Deployment, EncryptedCredential, AzureCredential } = getModels();
 
   try {
     // Fetch deployment
     const deployment = await Deployment.findByPk(deploymentId);
 
     if (!deployment) {
-      console.error(`❌ [WORKER] Deployment not found: ${deploymentId}`);
+      logger.error('Worker: Deployment not found for termination', { deploymentId });
       return;
     }
 
     if (!deployment.instance_id) {
-      console.log(`⏭️  [WORKER] Deployment ${deploymentId} has no instance ID, marking as terminated`);
+      logger.info('Worker: No instance ID, marking as terminated', { deploymentId });
       await deployment.update({
         status: 'terminated',
         completed_at: new Date(),
@@ -281,52 +782,81 @@ async function processTermination(deploymentId) {
       return;
     }
 
-    console.log(`🗑️  [WORKER] Processing termination: ${deploymentId}`);
+    logger.info('Worker: Processing termination', { deploymentId });
 
-    // Fetch user's AWS credentials
-    const awsCredential = await EncryptedCredential.findOne({
-      where: {
-        user_id: deployment.user_id,
-        credential_type: 'aws',
-      },
-    });
+    // Detect provider
+    const provider = deployment.configuration?.provider || 'aws';
 
-    if (!awsCredential) {
-      throw new Error('AWS credentials not found');
-    }
-
-    // Decrypt AWS credentials
-    const decryptedData = decrypt(
-      {
-        encrypted: awsCredential.encrypted_data,
-        iv: awsCredential.iv,
-        authTag: awsCredential.auth_tag,
-        salt: awsCredential.salt,
-      },
-      deployment.user_id
-    );
-
-    const awsCredentials = JSON.parse(decryptedData);
-
-    // Check if deployment has SSH keypair to clean up
-    const config = deployment.configuration || {};
-    const ssh = config.ssh || {};
-    const keyPairName = ssh.keyPairName;
-
-    if (keyPairName) {
-      // Use enhanced termination to clean up keypair
-      console.log(`🔑 [WORKER] Cleaning up SSH keypair: ${keyPairName}`);
-      await terminateDeploymentComplete(awsCredentials, {
-        region: deployment.region,
-        instanceId: deployment.instance_id,
-        keyPairName: keyPairName,
+    if (provider === 'azure') {
+      // Terminate Azure VM
+      const azureCredential = await AzureCredential.findOne({
+        where: { user_id: deployment.user_id, is_default: true }
       });
+
+      if (!azureCredential) {
+        throw new Error('Azure credentials not found');
+      }
+
+      const clientSecret = decryptData(azureCredential.client_secret);
+      const azureCredentials = {
+        subscriptionId: azureCredential.subscription_id,
+        tenantId: azureCredential.tenant_id,
+        clientId: azureCredential.client_id,
+        clientSecret: clientSecret
+      };
+
+      await azureService.terminateDeployment(azureCredentials, {
+        region: deployment.region,
+        vmName: deployment.configuration?.azureVmName,
+        resourceGroup: deployment.configuration?.azureResourceGroup
+      });
+
     } else {
-      // Use basic termination
-      await terminateDeployment(awsCredentials, {
-        region: deployment.region,
-        instanceId: deployment.instance_id,
+      // Terminate AWS instance
+      const awsCredential = await EncryptedCredential.findOne({
+        where: {
+          user_id: deployment.user_id,
+          credential_type: 'aws',
+        },
       });
+
+      if (!awsCredential) {
+        throw new Error('AWS credentials not found');
+      }
+
+      // Decrypt AWS credentials
+      const decryptedData = decrypt(
+        {
+          encrypted: awsCredential.encrypted_data,
+          iv: awsCredential.iv,
+          authTag: awsCredential.auth_tag,
+          salt: awsCredential.salt,
+        },
+        deployment.user_id
+      );
+
+      const awsCredentials = JSON.parse(decryptedData);
+
+      // Check if deployment has SSH keypair to clean up
+      const config = deployment.configuration || {};
+      const ssh = config.ssh || {};
+      const keyPairName = ssh.keyPairName;
+
+      if (keyPairName) {
+        // Use enhanced termination to clean up keypair
+        logger.info('Worker: Cleaning up SSH keypair', { deploymentId, keyPairName });
+        await terminateDeploymentComplete(awsCredentials, {
+          region: deployment.region,
+          instanceId: deployment.instance_id,
+          keyPairName: keyPairName,
+        });
+      } else {
+        // Use basic termination
+        await terminateDeployment(awsCredentials, {
+          region: deployment.region,
+          instanceId: deployment.instance_id,
+        });
+      }
     }
 
     // Update deployment status
@@ -335,14 +865,14 @@ async function processTermination(deploymentId) {
       completed_at: new Date(),
     });
 
-    console.log(`✅ [WORKER] Termination completed: ${deploymentId}`);
+    logger.info('Worker: Termination completed', { deploymentId });
 
     return {
       success: true,
       deploymentId,
     };
   } catch (error) {
-    console.error(`❌ [WORKER] Termination failed: ${deploymentId}`, error);
+    logger.error('Worker: Termination failed', { deploymentId, error: error.message, stack: error.stack });
 
     // Still mark as terminated even if AWS call failed
     // (instance might have already been terminated manually)
@@ -380,7 +910,7 @@ async function pollDeployments() {
     });
 
     if (pendingDeployments.length > 0) {
-      console.log(`📋 [WORKER] Found ${pendingDeployments.length} pending deployment(s)`);
+      logger.info('Worker: Found pending deployments', { count: pendingDeployments.length });
 
       // Process each deployment (sequentially to avoid AWS rate limits)
       for (const deployment of pendingDeployments) {
@@ -388,7 +918,7 @@ async function pollDeployments() {
       }
     }
   } catch (error) {
-    console.error(`❌ [WORKER] Error polling deployments:`, error);
+    logger.error('Worker: Error polling deployments', { error: error.message, stack: error.stack });
   }
 }
 
@@ -396,7 +926,7 @@ async function pollDeployments() {
  * Start deployment worker (polls every 30 seconds)
  */
 function startWorker(intervalMs = 30000) {
-  console.log(`🔄 [WORKER] Starting deployment worker (poll interval: ${intervalMs}ms)`);
+  logger.info('Worker: Starting deployment worker', { pollIntervalMs: intervalMs });
 
   // Initial poll
   pollDeployments();
@@ -406,7 +936,7 @@ function startWorker(intervalMs = 30000) {
 
   // Return function to stop worker
   return () => {
-    console.log(`⏹️  [WORKER] Stopping deployment worker`);
+    logger.info('Worker: Stopping deployment worker');
     clearInterval(interval);
   };
 }

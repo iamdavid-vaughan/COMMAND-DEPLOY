@@ -5,17 +5,19 @@ import { useRouter } from 'next/navigation';
 import { deploymentsAPI } from '@/lib/api';
 import {
   Rocket, ChevronRight, ChevronLeft, Server, Shield,
-  GitBranch, Globe, CheckCircle, AlertCircle, X, Cloud
+  GitBranch, Globe, CheckCircle, AlertCircle, X, Cloud, Package
 } from 'lucide-react';
+import TemplateGallery from '@/components/TemplateGallery';
 
 // Wizard Steps
 const STEPS = [
-  { id: 1, name: 'Project', icon: Rocket },
-  { id: 2, name: 'Server', icon: Server },
-  { id: 3, name: 'Security', icon: Shield },
-  { id: 4, name: 'Application', icon: GitBranch },
-  { id: 5, name: 'Domain & SSL', icon: Globe },
-  { id: 6, name: 'Review', icon: CheckCircle },
+  { id: 1, name: 'Template', icon: Package },
+  { id: 2, name: 'Project', icon: Rocket },
+  { id: 3, name: 'Server', icon: Server },
+  { id: 4, name: 'Security', icon: Shield },
+  { id: 5, name: 'Application', icon: GitBranch },
+  { id: 6, name: 'Domain & SSL', icon: Globe },
+  { id: 7, name: 'Review', icon: CheckCircle },
 ];
 
 const AWS_REGIONS = [
@@ -40,6 +42,18 @@ const GCP_REGIONS = [
   { value: 'asia-northeast1', label: 'Asia Northeast (Tokyo)' },
 ];
 
+const AZURE_REGIONS = [
+  { value: 'eastus', label: 'East US (Virginia)' },
+  { value: 'eastus2', label: 'East US 2 (Virginia)' },
+  { value: 'westus', label: 'West US (California)' },
+  { value: 'westus2', label: 'West US 2 (Washington)' },
+  { value: 'centralus', label: 'Central US (Iowa)' },
+  { value: 'westeurope', label: 'West Europe (Netherlands)' },
+  { value: 'northeurope', label: 'North Europe (Ireland)' },
+  { value: 'southeastasia', label: 'Southeast Asia (Singapore)' },
+  { value: 'eastasia', label: 'East Asia (Hong Kong)' },
+];
+
 const AWS_INSTANCE_TYPES = [
   { value: 't3.micro', label: 't3.micro - 1 vCPU, 1GB RAM (Free Tier)', cost: '$0/mo*' },
   { value: 't3.small', label: 't3.small - 2 vCPU, 2GB RAM', cost: '$15/mo' },
@@ -54,6 +68,14 @@ const GCP_MACHINE_TYPES = [
   { value: 'e2-medium', label: 'e2-medium - 1-2 vCPU, 4GB RAM', cost: '$27/mo' },
   { value: 'n1-standard-1', label: 'n1-standard-1 - 1 vCPU, 3.75GB RAM', cost: '$25/mo' },
   { value: 'n1-standard-2', label: 'n1-standard-2 - 2 vCPU, 7.5GB RAM', cost: '$50/mo' },
+];
+
+const AZURE_VM_SIZES = [
+  { value: 'Standard_B1s', label: 'Standard_B1s - 1 vCPU, 1GB RAM', cost: '$8/mo' },
+  { value: 'Standard_B2s', label: 'Standard_B2s - 2 vCPU, 4GB RAM', cost: '$30/mo' },
+  { value: 'Standard_B2ms', label: 'Standard_B2ms - 2 vCPU, 8GB RAM', cost: '$60/mo' },
+  { value: 'Standard_D2s_v3', label: 'Standard_D2s_v3 - 2 vCPU, 8GB RAM', cost: '$70/mo' },
+  { value: 'Standard_D4s_v3', label: 'Standard_D4s_v3 - 4 vCPU, 16GB RAM', cost: '$140/mo' },
 ];
 
 const OS_OPTIONS = [
@@ -76,13 +98,17 @@ export default function NewDeploymentWizardPage() {
 
   // Wizard form data
   const [formData, setFormData] = useState({
-    // Step 1: Project
-    provider: 'aws' as 'aws' | 'gcp',
+    // Step 1: Template
+    selectedTemplate: null as any,
+    templateId: '',
+
+    // Step 2: Project
+    provider: 'aws' as 'aws' | 'gcp' | 'azure',
     projectName: '',
     region: 'us-east-1',
     instanceType: 't3.micro',
 
-    // Step 2: Server
+    // Step 3: Server
     operatingSystem: 'ubuntu',
     deploymentUsername: 'deploy',
     sshPort: 2847,
@@ -112,6 +138,17 @@ export default function NewDeploymentWizardPage() {
     sslUseStaging: false,
   });
 
+  const handleTemplateSelect = (template: any) => {
+    setFormData({
+      ...formData,
+      selectedTemplate: template,
+      templateId: template.id,
+      // Pre-fill configuration from template
+      instanceType: template.configuration.default_instance_type || formData.instanceType,
+      storageRootSize: template.configuration.default_storage || formData.storageRootSize,
+    });
+  };
+
   const handleNext = () => {
     if (currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
@@ -130,7 +167,8 @@ export default function NewDeploymentWizardPage() {
 
     try {
       const payload = {
-        provider: formData.provider, // 'aws' or 'gcp'
+        templateId: formData.templateId || undefined,
+        provider: formData.provider, // 'aws' or 'gcp' or 'azure'
         projectName: formData.projectName,
         region: formData.region,
         instanceType: formData.instanceType,
@@ -149,7 +187,10 @@ export default function NewDeploymentWizardPage() {
         githubBranch: formData.githubBranch,
         applicationPort: formData.applicationPort,
         envVars: formData.envVars,
-        domains: formData.domains,
+        // Ensure primary domain is always included in domains array
+        domains: formData.primaryDomain
+          ? [formData.primaryDomain, ...formData.domains.filter(d => d !== formData.primaryDomain)]
+          : formData.domains,
         primaryDomain: formData.primaryDomain,
         enableSsl: formData.enableSsl,
         sslEmail: formData.sslEmail,
@@ -157,22 +198,39 @@ export default function NewDeploymentWizardPage() {
         sslUseStaging: formData.sslUseStaging,
       };
 
-      await deploymentsAPI.create(payload);
+      const response = await deploymentsAPI.create(payload);
+      const deploymentId = response.data.deployment?.id;
 
       setMessage({
         type: 'success',
-        text: 'Deployment created successfully! Redirecting to deployments...',
+        text: 'Deployment created successfully! Redirecting to live progress...',
       });
 
+      // Redirect to deployment detail page to show real-time progress
       setTimeout(() => {
-        router.push('/dashboard/deployments');
-      }, 1500);
+        if (deploymentId) {
+          router.push(`/dashboard/deployments/${deploymentId}`);
+        } else {
+          router.push('/dashboard/deployments');
+        }
+      }, 1000);
     } catch (err: any) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Failed to create deployment',
-      });
-      setLoading(false);
+      // Check if payment is required - redirect to billing
+      if (err.response?.data?.code === 'PAYMENT_REQUIRED') {
+        setMessage({
+          type: 'error',
+          text: err.response?.data?.message || 'Payment setup required. Redirecting to billing...',
+        });
+        setTimeout(() => {
+          router.push(err.response?.data?.redirectTo || '/dashboard/billing');
+        }, 2000);
+      } else {
+        setMessage({
+          type: 'error',
+          text: err.response?.data?.message || 'Failed to create deployment',
+        });
+        setLoading(false);
+      }
     }
   };
 
@@ -271,6 +329,14 @@ export default function NewDeploymentWizardPage() {
       {/* Step Content */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 min-h-96">
         {currentStep === 1 && (
+          <TemplateGallery
+            selectedTemplate={formData.selectedTemplate}
+            onSelectTemplate={handleTemplateSelect}
+            provider={formData.provider}
+          />
+        )}
+
+        {currentStep === 2 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Project Configuration</h2>
 
@@ -279,7 +345,7 @@ export default function NewDeploymentWizardPage() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Cloud Provider <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -329,6 +395,31 @@ export default function NewDeploymentWizardPage() {
                   </div>
                   <p className="text-sm text-gray-600">Compute Engine, Cloud Storage, Free Tier available</p>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      provider: 'azure',
+                      region: 'eastus',
+                      instanceType: 'Standard_B1s'
+                    });
+                  }}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    formData.provider === 'azure'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Cloud className={`w-6 h-6 ${formData.provider === 'azure' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span className={`font-semibold ${formData.provider === 'azure' ? 'text-blue-900' : 'text-gray-900'}`}>
+                      Microsoft Azure
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">Virtual Machines, Blob Storage</p>
+                </button>
               </div>
             </div>
 
@@ -351,14 +442,14 @@ export default function NewDeploymentWizardPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {formData.provider === 'aws' ? 'AWS Region' : 'GCP Region'}
+                {formData.provider === 'aws' ? 'AWS Region' : formData.provider === 'gcp' ? 'GCP Region' : 'Azure Region'}
               </label>
               <select
                 value={formData.region}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {(formData.provider === 'aws' ? AWS_REGIONS : GCP_REGIONS).map((region) => (
+                {(formData.provider === 'aws' ? AWS_REGIONS : formData.provider === 'gcp' ? GCP_REGIONS : AZURE_REGIONS).map((region) => (
                   <option key={region.value} value={region.value}>
                     {region.label}
                   </option>
@@ -368,10 +459,10 @@ export default function NewDeploymentWizardPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {formData.provider === 'aws' ? 'Instance Type' : 'Machine Type'}
+                {formData.provider === 'aws' ? 'Instance Type' : formData.provider === 'gcp' ? 'Machine Type' : 'VM Size'}
               </label>
               <div className="space-y-2">
-                {(formData.provider === 'aws' ? AWS_INSTANCE_TYPES : GCP_MACHINE_TYPES).map((type) => (
+                {(formData.provider === 'aws' ? AWS_INSTANCE_TYPES : formData.provider === 'gcp' ? GCP_MACHINE_TYPES : AZURE_VM_SIZES).map((type) => (
                   <label
                     key={type.value}
                     className="flex items-center justify-between p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
@@ -391,12 +482,14 @@ export default function NewDeploymentWizardPage() {
                   </label>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-gray-500">* Free tier: 750 hours/month for first 12 months</p>
+              {(formData.provider === 'aws' || formData.provider === 'gcp') && (
+                <p className="mt-2 text-xs text-gray-500">* Free tier: 750 hours/month for first 12 months</p>
+              )}
             </div>
           </div>
         )}
 
-        {currentStep === 2 && (
+        {currentStep === 3 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Server Configuration</h2>
 
@@ -522,7 +615,7 @@ export default function NewDeploymentWizardPage() {
           </div>
         )}
 
-        {currentStep === 3 && (
+        {currentStep === 4 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Security Setup</h2>
 
@@ -597,7 +690,7 @@ export default function NewDeploymentWizardPage() {
           </div>
         )}
 
-        {currentStep === 4 && (
+        {currentStep === 5 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Application Setup</h2>
 
@@ -705,7 +798,7 @@ export default function NewDeploymentWizardPage() {
           </div>
         )}
 
-        {currentStep === 5 && (
+        {currentStep === 6 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Domain & SSL Configuration</h2>
 
@@ -720,8 +813,7 @@ export default function NewDeploymentWizardPage() {
                   const domain = e.target.value;
                   setFormData({
                     ...formData,
-                    primaryDomain: domain,
-                    domains: domain ? [domain, ...formData.domains.filter(d => d !== domain)] : formData.domains
+                    primaryDomain: domain
                   });
                 }}
                 placeholder="example.com"
@@ -879,7 +971,7 @@ export default function NewDeploymentWizardPage() {
           </div>
         )}
 
-        {currentStep === 6 && (
+        {currentStep === 7 && (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-gray-900">Review & Deploy</h2>
 
@@ -1039,7 +1131,10 @@ export default function NewDeploymentWizardPage() {
           {currentStep < STEPS.length ? (
             <button
               onClick={handleNext}
-              disabled={!formData.projectName}
+              disabled={
+                (currentStep === 1 && !formData.selectedTemplate) ||
+                (currentStep === 2 && !formData.projectName)
+              }
               className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
             >
               Next

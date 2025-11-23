@@ -12,6 +12,7 @@ export default function RegisterPage() {
     name: '',
     company: '',
   });
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -19,6 +20,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!agreedToTerms) {
+      setError('You must agree to the Terms of Service, Privacy Policy, EULA, and AUP to continue');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -62,7 +69,7 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center">
@@ -109,7 +116,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
@@ -253,6 +260,37 @@ export default function RegisterPage() {
                 <br />
                 We'll send you a verification email. Click the link to verify your email and set your password.
               </p>
+            </div>
+
+            {/* Terms Acceptance */}
+            <div className="flex items-start">
+              <input
+                type="checkbox"
+                id="agreeToTerms"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="h-4 w-4 mt-1 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                required
+              />
+              <label htmlFor="agreeToTerms" className="ml-3 text-sm text-gray-700">
+                I agree to the{' '}
+                <Link href="/legal/terms" target="_blank" className="text-blue-600 hover:underline font-medium">
+                  Terms of Service
+                </Link>
+                ,{' '}
+                <Link href="/legal/privacy" target="_blank" className="text-blue-600 hover:underline font-medium">
+                  Privacy Policy
+                </Link>
+                ,{' '}
+                <Link href="/legal/eula" target="_blank" className="text-blue-600 hover:underline font-medium">
+                  EULA
+                </Link>
+                , and{' '}
+                <Link href="/legal/aup" target="_blank" className="text-blue-600 hover:underline font-medium">
+                  Acceptable Use Policy
+                </Link>
+                <span className="text-red-500"> *</span>
+              </label>
             </div>
 
             {/* Submit Button */}

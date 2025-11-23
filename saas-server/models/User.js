@@ -39,6 +39,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(255),
       allowNull: true
     },
+    avatar_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true
+    },
     email_verified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
@@ -95,6 +99,11 @@ module.exports = (sequelize) => {
     last_login_at: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    onboarding_completed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     },
     password_reset_token: {
       type: DataTypes.STRING(255),

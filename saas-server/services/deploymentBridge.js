@@ -18,8 +18,14 @@ const os = require('os');
 const { getModels } = require('../models');
 const { decrypt } = require('./encryption');
 const DeploymentExecutor = require('../../lib/wizard/deployment-executor');
+const logger = require('../utils/logger');
 
 class DeploymentBridge {
+  constructor() {
+    // Track infrastructure results so they can be retrieved even on failure
+    this.lastInfrastructureResult = null;
+  }
+
   /**
    * Execute deployment using CLI deployment executor
    * @param {string} deploymentId - SaaS deployment ID
@@ -29,7 +35,9 @@ class DeploymentBridge {
    * @returns {Promise<object>} Deployment results
    */
   async executeDeployment(deploymentId, saasConfig, userId, logCallback = null) {
-    console.log(`[DeploymentBridge] Starting deployment ${deploymentId} for user ${userId}`);
+    // Reset infrastructure tracking
+    this.lastInfrastructureResult = null;
+    logger.info('DeploymentBridge: Starting deployment', { deploymentId, userId });
 
     // Store original console methods
     const originalLog = console.log;
@@ -64,37 +72,76 @@ class DeploymentBridge {
 
       // 1. Get user's stored credentials from database
       const credentials = await this.getStoredCredentials(userId);
-      console.log('[DeploymentBridge] Retrieved credentials from database');
+      logger.info('[DeploymentBridge] Retrieved credentials from database');
 
       // 2. Create temporary project directory
       const projectPath = await this.createProjectDirectory(deploymentId, saasConfig.projectName);
-      console.log(`[DeploymentBridge] Created project directory: ${projectPath}`);
+      logger.info(`[DeploymentBridge] Created project directory: ${projectPath}`);
 
       // 3. Build CLI-compatible stepData
       const stepData = this.buildStepData(saasConfig, credentials);
-      console.log('[DeploymentBridge] Built CLI-compatible stepData');
+      logger.info('[DeploymentBridge] Built CLI-compatible stepData');
 
       // 4. Call the ACTUAL deployment executor (the one the CLI uses)
-      console.log('[DeploymentBridge] Calling CLI deployment executor...');
-      console.log('');
-      console.log('🚀 Starting focal-deploy deployment process...');
-      console.log('');
-
       const executor = new DeploymentExecutor();
-      const result = await executor.execute(projectPath, stepData);
 
-      console.log('');
-      console.log('[DeploymentBridge] Deployment completed successfully');
+      // Check if deployment can be resumed
+      const canResume = await executor.canResumeDeployment(projectPath);
+
+      let result;
+      if (canResume) {
+        logger.info('[DeploymentBridge] Found existing deployment state - resuming from last phase');
+        logger.info('');
+        logger.info('🔄 Resuming focal-deploy deployment process...');
+        logger.info('');
+
+        if (logCallback) {
+          logCallback('info', '📋 Loaded deployment state from previous run');
+          logCallback('info', '⏩ Skipping completed phases, continuing from last incomplete phase');
+        }
+
+        result = await executor.resumeDeployment(projectPath, stepData);
+      } else {
+        logger.info('[DeploymentBridge] Starting new deployment');
+        logger.info('');
+        logger.info('🚀 Starting focal-deploy deployment process...');
+        logger.info('');
+
+        result = await executor.execute(projectPath, stepData);
+      }
+
+      // Save infrastructure result for reference
+      if (result && result.phases && result.phases.infrastructure) {
+        this.lastInfrastructureResult = result.phases.infrastructure;
+      }
+
+      logger.info('');
+      logger.info('[DeploymentBridge] Deployment completed successfully');
 
       return {
         ...result,
         projectPath
       };
     } catch (error) {
-      console.error('[DeploymentBridge] Deployment failed:', error.message);
+      logger.error('[DeploymentBridge] Deployment failed:', error.message);
       if (error.stack) {
         console.error(error.stack);
       }
+
+      // Check if executor has partial results (infrastructure created but later phase failed)
+      // The executor may have stored phase results even if it threw an error
+      if (error.phases && error.phases.infrastructure) {
+        this.lastInfrastructureResult = error.phases.infrastructure;
+      }
+
+      // Also check if error contains instanceId/publicIp directly
+      if (error.instanceId || error.publicIp) {
+        this.lastInfrastructureResult = {
+          instanceId: error.instanceId,
+          publicIp: error.publicIp || error.publicIpAddress,
+        };
+      }
+
       throw error;
     } finally {
       // Restore original console methods
@@ -159,11 +206,14 @@ class DeploymentBridge {
       githubCredentials = JSON.parse(githubDecrypted);
     }
 
-    // Get DNS credentials (optional)
+    // Get DNS credentials (optional) - check for any DNS provider
+    // Supported providers: digitalocean, cloudflare, godaddy, route53
     const dnsCred = await EncryptedCredential.findOne({
       where: {
         user_id: userId,
-        credential_type: 'dns'
+        credential_type: {
+          [require('sequelize').Op.in]: ['digitalocean', 'cloudflare', 'godaddy', 'route53']
+        }
       }
     });
 
@@ -178,7 +228,31 @@ class DeploymentBridge {
         },
         userId
       );
-      dnsCredentials = JSON.parse(dnsDecrypted);
+      const decryptedData = JSON.parse(dnsDecrypted);
+
+      // Map credentials to format expected by DNS provider service
+      let mappedCredentials = { ...decryptedData };
+
+      // DigitalOcean: apiToken → token
+      if (dnsCred.credential_type === 'digitalocean' && decryptedData.apiToken) {
+        mappedCredentials.token = decryptedData.apiToken;
+        delete mappedCredentials.apiToken; // Remove the old field name
+      }
+
+      // Cloudflare: apiToken → apiToken, email required
+      // (already correct format)
+
+      // Route53: accessKeyId, secretAccessKey, region
+      // (already correct format)
+
+      // GoDaddy: apiKey, apiSecret
+      // (already correct format)
+
+      // Add provider type to credentials
+      dnsCredentials = {
+        ...mappedCredentials,
+        provider: dnsCred.credential_type
+      };
     }
 
     return {
@@ -291,14 +365,21 @@ class DeploymentBridge {
         }
       },
 
-      // SSL configuration
+      // SSL configuration - include DNS provider for automatic DNS-01 challenges
       sslConfig: (saasConfig.enableSsl && saasConfig.primaryDomain) ? {
         enabled: true,
         provider: 'letsencrypt',
         email: saasConfig.sslEmail,
         challengeType: saasConfig.sslChallengeType || 'dns-01',
         domains: saasConfig.domains || [saasConfig.primaryDomain],
-        useStaging: saasConfig.sslUseStaging || false
+        useStaging: saasConfig.sslUseStaging || false,
+        // Include DNS provider for automatic DNS-01 challenge
+        ...(credentials.dns && (saasConfig.sslChallengeType === 'dns-01' || !saasConfig.sslChallengeType) ? {
+          dnsProvider: {
+            name: credentials.dns.provider,
+            credentials: credentials.dns
+          }
+        } : {})
       } : {
         enabled: false,
         provider: 'manual'
@@ -365,10 +446,10 @@ class DeploymentBridge {
     try {
       if (projectPath && await fs.pathExists(projectPath)) {
         await fs.remove(projectPath);
-        console.log(`[DeploymentBridge] Cleaned up project directory: ${projectPath}`);
+        logger.info('DeploymentBridge: Cleaned up project directory', { projectPath });
       }
     } catch (error) {
-      console.error(`[DeploymentBridge] Failed to cleanup directory: ${error.message}`);
+      logger.warn('DeploymentBridge: Failed to cleanup directory', { projectPath, error: error.message });
       // Don't throw - this is cleanup only
     }
   }

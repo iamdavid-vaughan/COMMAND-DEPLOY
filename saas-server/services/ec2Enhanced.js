@@ -17,6 +17,16 @@ const {
   CreateTagsCommand,
 } = require('@aws-sdk/client-ec2');
 const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
+const {
+  IAMClient,
+  CreateRoleCommand,
+  AttachRolePolicyCommand,
+  CreateInstanceProfileCommand,
+  AddRoleToInstanceProfileCommand,
+  GetInstanceProfileCommand,
+  GetRoleCommand,
+} = require('@aws-sdk/client-iam');
+const logger = require('../utils/logger');
 
 /**
  * Create EC2 deployment with SSH keypair
@@ -38,17 +48,23 @@ async function createDeploymentWithSSH(awsCredentials, deploymentConfig) {
     credentials: { accessKeyId, secretAccessKey },
   });
 
+  // Create IAM client for SSM role management
+  const iamClient = new IAMClient({
+    region,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+
   try {
-    console.log(`🚀 [EC2] Starting deployment for project: ${projectName}`);
+    logger.info('EC2Enhanced: Starting deployment', { projectName, region, instanceType });
 
     // Step 1: Verify credentials
     const accountId = await verifyCredentials(accessKeyId, secretAccessKey, region);
-    console.log(`✅ [EC2] Verified AWS credentials for account: ${accountId}`);
+    logger.info('EC2Enhanced: Verified AWS credentials', { accountId });
 
     // Step 2: Create SSH keypair
     const keyPairName = `focal-deploy-${projectName}-${Date.now()}`;
     const keypair = await createKeyPair(ec2Client, keyPairName);
-    console.log(`✅ [EC2] SSH keypair created: ${keyPairName}`);
+    logger.info('EC2Enhanced: SSH keypair created', { keyPairName });
 
     // Step 3: Create security group with custom ports
     const sshPort = server.sshPort || 22;
@@ -60,30 +76,31 @@ async function createDeploymentWithSSH(awsCredentials, deploymentConfig) {
       projectName,
       allowedPorts
     );
-    console.log(`✅ [EC2] Security group created: ${securityGroupId}`);
+    logger.info('EC2Enhanced: Security group created', { securityGroupId, allowedPorts });
 
     // Step 4: Get AMI based on OS selection
     const os = server.os || 'ubuntu-22.04';
     const amiId = getAMIForOS(region, os);
-    console.log(`✅ [EC2] Using AMI: ${amiId} (${os})`);
+    logger.info('EC2Enhanced: Using AMI', { amiId, os });
 
-    // Step 5: Launch EC2 instance
+    // Step 5: Launch EC2 instance with SSM support
     const instanceId = await launchInstanceWithKey(ec2Client, {
       amiId,
       instanceType,
       securityGroupId,
       keyPairName,
       projectName,
+      iamClient,
     });
-    console.log(`✅ [EC2] Instance launched: ${instanceId}`);
+    logger.info('EC2Enhanced: Instance launched', { instanceId });
 
     // Step 6: Wait for instance to be running
     const instance = await waitForInstanceRunning(ec2Client, instanceId);
-    console.log(`✅ [EC2] Instance running with private IP: ${instance.privateIp}`);
+    logger.info('EC2Enhanced: Instance running', { instanceId, privateIp: instance.privateIp });
 
     // Step 7: Allocate and associate Elastic IP
     const publicIp = await allocateAndAssociateElasticIP(ec2Client, instanceId);
-    console.log(`✅ [EC2] Elastic IP allocated: ${publicIp}`);
+    logger.info('EC2Enhanced: Elastic IP allocated', { publicIp, instanceId });
 
     return {
       success: true,
@@ -97,7 +114,7 @@ async function createDeploymentWithSSH(awsCredentials, deploymentConfig) {
       username: getDefaultUsername(os),
     };
   } catch (error) {
-    console.error(`❌ [EC2] Deployment failed:`, error);
+    logger.error('EC2Enhanced: Deployment failed', { projectName, error: error.message, stack: error.stack });
     throw new Error(`EC2 deployment failed: ${error.message}`);
   }
 }
@@ -176,10 +193,103 @@ async function createSecurityGroupWithPorts(ec2Client, projectName, allowedPorts
 }
 
 /**
- * Launch EC2 instance with SSH keypair
+ * Ensure SSM IAM role and instance profile exist
+ */
+async function ensureSSMInstanceProfile(iamClient) {
+  const roleName = 'FocalDeploy-EC2-SSM-Role';
+  const instanceProfileName = 'FocalDeploy-EC2-SSM-InstanceProfile';
+
+  try {
+    // Check if instance profile exists
+    await iamClient.send(new GetInstanceProfileCommand({ InstanceProfileName: instanceProfileName }));
+    logger.info('SSM: Instance profile already exists', { instanceProfileName });
+    return instanceProfileName;
+  } catch (err) {
+    if (err.name !== 'NoSuchEntity') throw err;
+
+    logger.info('SSM: Creating IAM role and instance profile for SSM');
+
+    // Create IAM role
+    try {
+      await iamClient.send(new CreateRoleCommand({
+        RoleName: roleName,
+        AssumeRolePolicyDocument: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+            Action: 'sts:AssumeRole'
+          }]
+        }),
+        Description: 'Role for Focal Deploy EC2 instances to use SSM',
+      }));
+    } catch (roleErr) {
+      if (roleErr.name !== 'EntityAlreadyExists') throw roleErr;
+    }
+
+    // Attach SSM managed policy
+    await iamClient.send(new AttachRolePolicyCommand({
+      RoleName: roleName,
+      PolicyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+    }));
+
+    // Create instance profile
+    try {
+      await iamClient.send(new CreateInstanceProfileCommand({ InstanceProfileName: instanceProfileName }));
+    } catch (profileErr) {
+      if (profileErr.name !== 'EntityAlreadyExists') throw profileErr;
+    }
+
+    // Add role to instance profile
+    try {
+      await iamClient.send(new AddRoleToInstanceProfileCommand({
+        InstanceProfileName: instanceProfileName,
+        RoleName: roleName
+      }));
+    } catch (addErr) {
+      if (addErr.name !== 'LimitExceeded') throw addErr;
+    }
+
+    // Wait for instance profile to be ready
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    logger.info('SSM: IAM role and instance profile created successfully');
+    return instanceProfileName;
+  }
+}
+
+/**
+ * Launch EC2 instance with SSH keypair and SSM support
  */
 async function launchInstanceWithKey(ec2Client, config) {
-  const { amiId, instanceType, securityGroupId, keyPairName, projectName } = config;
+  const { amiId, instanceType, securityGroupId, keyPairName, projectName, iamClient } = config;
+
+  // Ensure SSM instance profile exists
+  const instanceProfileName = await ensureSSMInstanceProfile(iamClient);
+
+  // UserData script to install and configure SSM agent
+  const userData = Buffer.from(`#!/bin/bash
+set -e
+
+# Install SSM agent (usually pre-installed on Amazon Linux 2 and Ubuntu)
+if ! systemctl is-active --quiet amazon-ssm-agent; then
+  echo "Installing SSM agent..."
+  if [ -f /etc/debian_version ]; then
+    # Ubuntu/Debian
+    wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
+    dpkg -i amazon-ssm-agent.deb
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
+  elif [ -f /etc/redhat-release ]; then
+    # Amazon Linux/RHEL/CentOS
+    yum install -y amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
+  fi
+fi
+
+echo "SSM agent installation complete"
+`).toString('base64');
 
   const command = new RunInstancesCommand({
     ImageId: amiId,
@@ -188,6 +298,8 @@ async function launchInstanceWithKey(ec2Client, config) {
     MaxCount: 1,
     KeyName: keyPairName,
     SecurityGroupIds: [securityGroupId],
+    IamInstanceProfile: { Name: instanceProfileName },
+    UserData: userData,
     TagSpecifications: [
       {
         ResourceType: 'instance',
@@ -195,6 +307,7 @@ async function launchInstanceWithKey(ec2Client, config) {
           { Key: 'Name', Value: `focal-deploy-${projectName}` },
           { Key: 'ManagedBy', Value: 'FocalDeploy' },
           { Key: 'Project', Value: projectName },
+          { Key: 'SSMEnabled', Value: 'true' },
         ],
       },
     ],
@@ -367,7 +480,7 @@ async function terminateDeploymentComplete(awsCredentials, deploymentInfo) {
       });
       await ec2Client.send(deleteKeyCommand);
     } catch (error) {
-      console.warn(`⚠️  [EC2] Could not delete keypair ${keyPairName}:`, error.message);
+      logger.warn('EC2Enhanced: Could not delete keypair', { keyPairName, error: error.message });
     }
   }
 

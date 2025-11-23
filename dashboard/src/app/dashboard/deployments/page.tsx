@@ -314,7 +314,13 @@ export default function DeploymentsPage() {
                       {deployment.region || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {deployment.instance_type || 'N/A'}
+                      {deployment.instance_id ? (
+                        <code className="text-sm text-gray-900">
+                          {deployment.instance_id}
+                        </code>
+                      ) : (
+                        <span className="text-sm text-gray-400">N/A</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {deployment.public_ip ? (

@@ -4,6 +4,7 @@
  */
 
 const postmark = require('postmark');
+const logger = require('../utils/logger');
 
 // Initialize Postmark client lazily
 let client = null;
@@ -98,10 +99,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log('✅ [EMAIL] Verification email sent via Postmark:', result.MessageID);
+    logger.info('✅ [EMAIL] Verification email sent via Postmark:', result.MessageID);
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error('❌ [EMAIL] Error sending verification email:', error);
+    logger.error('❌ [EMAIL] Error sending verification email:', error);
     throw error;
   }
 }
@@ -187,10 +188,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log('✅ [EMAIL] Password reset email sent via Postmark:', result.MessageID);
+    logger.info('✅ [EMAIL] Password reset email sent via Postmark:', result.MessageID);
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error('❌ [EMAIL] Error sending password reset email:', error);
+    logger.error('❌ [EMAIL] Error sending password reset email:', error);
     throw error;
   }
 }
@@ -264,10 +265,10 @@ async function sendWelcomeEmail(email, name = '') {
       MessageStream: 'outbound'
     });
 
-    console.log('✅ [EMAIL] Welcome email sent via Postmark:', result.MessageID);
+    logger.info('✅ [EMAIL] Welcome email sent via Postmark:', result.MessageID);
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error('❌ [EMAIL] Error sending welcome email:', error);
+    logger.error('❌ [EMAIL] Error sending welcome email:', error);
     // Don't throw - welcome email is non-critical
     return { success: false, error: error.message };
   }

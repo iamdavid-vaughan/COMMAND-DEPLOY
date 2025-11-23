@@ -538,7 +538,7 @@ server {
   log(message) {
     const timestamp = new Date().toISOString();
     const logEntry = `[${timestamp}] ${message}`;
-    console.log(logEntry);
+    logger.info(logEntry);
     this.logger.push(logEntry);
   }
 

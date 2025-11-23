@@ -1,41 +1,62 @@
 # Focal Deploy v2.0
 
-🚀 **Complete AWS Deployment Automation with Wizard-Based Setup**
+🚀 **Multi-Cloud Deployment Automation - AWS, Google Cloud & Microsoft Azure**
 
-A powerful, beginner-friendly CLI tool that automates AWS deployment for Node.js applications with a comprehensive setup wizard. Deploy your apps to production in minutes, not hours - no AWS expertise required!
+A powerful, beginner-friendly CLI tool and SaaS platform that automates cloud deployment for Node.js applications. Deploy your apps to **AWS**, **Google Cloud**, or **Microsoft Azure** in minutes, not hours - no DevOps expertise required!
 
 ## ✨ Why Focal Deploy v2.0?
 
+- **☁️ True Multi-Cloud** - Deploy to AWS, Google Cloud, or Microsoft Azure from one platform
 - **🧙‍♂️ Complete Setup Wizard** - Single command handles everything from credentials to deployment
-- **🔐 Integrated Credential Management** - Secure collection and validation of AWS, GitHub, and DNS credentials
+- **🔐 Integrated Credential Management** - Secure collection and validation of AWS, GCP, Azure, GitHub, and DNS credentials
 - **🚀 One Command Deployment** - `focal-deploy new <app-name>` does it all in 5-10 minutes
 - **🛡️ Built-in Emergency Access** - SSM Session Manager and emergency SSH keys configured automatically
 - **🌍 Multi-OS Support** - Deploy on Ubuntu 22.04 LTS or Debian 12 (Bookworm)
 - **💰 Cost Effective** - Optimized for small to medium applications (~$35/month)
 - **🔒 Production Ready** - SSL certificates, security groups, and monitoring included
 - **🧪 Safe Testing** - Dry-run mode and automatic cleanup prevent costly mistakes
-- **👥 Beginner Friendly** - Clear error messages without technical AWS jargon
+- **👥 Beginner Friendly** - Clear error messages without technical cloud jargon
 
 ## 🎯 What It Does
 
-Focal Deploy v2.0 automates the entire AWS deployment process with a comprehensive wizard:
+Focal Deploy v2.0 automates cloud deployment across **AWS, Google Cloud, and Microsoft Azure**:
 
-1. **🧙‍♂️ Interactive Setup Wizard** - Guides you through every step with real-time validation
-2. **🔐 Credential Collection** - Securely collects and validates AWS, GitHub, and DNS credentials
-3. **🏗️ Infrastructure Setup** - Creates EC2 instances, S3 buckets, security groups
-4. **⚙️ Server Configuration** - Installs Docker, sets up SSL certificates
-5. **🚀 Application Deployment** - Deploys your app with Docker Compose
-6. **🌐 DNS Automation** - Automatic DNS record management with multiple providers
-7. **🛡️ Emergency Access Setup** - Configures SSM Session Manager and emergency SSH keys
-8. **📊 Monitoring & Logs** - Health checks and easy log access
-9. **🔒 Domain Management** - SSL automation with DNS-01 challenges
-10. **💾 Backup & Restore** - Automated database backups
+1. **☁️ Multi-Cloud Selection** - Choose AWS EC2, Google Compute Engine, or Azure Virtual Machines
+2. **🧙‍♂️ Interactive Setup Wizard** - Guides you through every step with real-time validation
+3. **🔐 Credential Collection** - Securely collects and validates AWS, GCP, Azure, GitHub, and DNS credentials
+4. **🏗️ Infrastructure Setup** - Creates instances, storage, VPCs/VNets, and security groups
+5. **⚙️ Server Configuration** - Installs Docker, sets up SSL certificates
+6. **🚀 Application Deployment** - Deploys your app with Docker Compose
+7. **🌐 DNS Automation** - Automatic DNS record management with multiple providers
+8. **🛡️ Emergency Access Setup** - Configures SSM Session Manager and emergency SSH keys
+9. **📊 Monitoring & Logs** - Health checks and easy log access
+10. **🔒 Domain Management** - SSL automation with DNS-01 challenges
+11. **💾 Backup & Restore** - Automated database backups
 
 ## 🚀 Features
 
+### ☁️ Multi-Cloud Support
+- **AWS** - EC2, S3, RDS, Lambda, CloudFront, Route 53
+- **Google Cloud** - Compute Engine, Cloud Storage, Cloud SQL
+- **Microsoft Azure** - Virtual Machines, Virtual Networks, Network Security Groups, Public IPs
+- **Unified Interface** - Manage all three clouds from one dashboard
+- **Provider Selection** - Choose the best cloud for each deployment
+
+### 📦 Pre-configured Deployment Templates
+- **One-Click Infrastructure** - Deploy complete stacks with pre-configured templates
+- **WordPress + LAMP** - Apache, MySQL/RDS, PHP 8.2, WordPress CLI, S3 integration
+- **Node.js + PM2** - Node 18, PM2 process manager, Nginx reverse proxy
+- **LAMP Stack** - Apache, MySQL, PHP 8.2, phpMyAdmin
+- **Static Sites** - Optimized Nginx with gzip, caching, optional S3/CloudFront
+- **Docker Host** - Docker, Docker Compose, Portainer management UI
+- **RDS Auto-Provisioning** - Automatic MySQL database with encrypted storage
+- **S3 Auto-Setup** - Bucket creation with CORS, encryption, lifecycle rules
+- **Template Customization** - Modify instance size, storage, and configuration
+- **CLI Template Browser** - `focal-deploy templates list` and `focal-deploy templates info <slug>`
+
 ### 🧙‍♂️ Complete Setup Wizard
 - **One Command Setup** - `focal-deploy new <app-name>` handles everything
-- **Interactive Credential Collection** - Secure AWS, GitHub, and DNS credential gathering
+- **Interactive Credential Collection** - Secure AWS, GCP, Azure, GitHub, and DNS credential gathering
 - **Real-time Validation** - Instant feedback on all inputs and configurations
 - **Step-by-step Guidance** - Clear progress indicators and instructions
 - **Automatic Error Recovery** - Built-in retry mechanisms and error handling
@@ -206,7 +227,51 @@ focal-deploy shell my-awesome-app
 focal-deploy destroy my-awesome-app
 ```
 
-### Step 4: Emergency Access (If Needed)
+### Step 4: Using Deployment Templates
+
+```bash
+# Browse available templates
+focal-deploy templates list
+
+# View template details
+focal-deploy templates info wordpress-lamp
+
+# Deploy with a specific template
+focal-deploy new my-blog --template wordpress-lamp
+
+# Deploy WordPress with RDS database
+focal-deploy new my-site --template wordpress-lamp
+# ✅ Auto-provisions RDS MySQL instance
+# ✅ Creates S3 bucket for media storage
+# ✅ Configures WordPress with WP-CLI
+# ✅ Sets up SSL with Let's Encrypt
+# ✅ Injects database credentials automatically
+
+# Deploy Node.js app with PM2
+focal-deploy new my-api --template nodejs-pm2
+# ✅ Installs Node 18 + PM2
+# ✅ Configures Nginx reverse proxy
+# ✅ Sets up auto-restart on failures
+# ✅ Includes sample Express app
+
+# Deploy static site with S3/CloudFront
+focal-deploy new my-portfolio --template static-nginx
+# ✅ Optimized Nginx configuration
+# ✅ Optional S3 bucket + CloudFront CDN
+# ✅ Gzip compression and caching
+# ✅ Perfect for React, Vue, Angular apps
+
+# Filter templates by provider
+focal-deploy templates list --provider aws
+focal-deploy templates list --provider gcp
+focal-deploy templates list --provider azure
+
+# Search templates
+focal-deploy templates list --search wordpress
+focal-deploy templates list --framework nodejs
+```
+
+### Step 5: Emergency Access (If Needed)
 
 ```bash
 # Connect via SSM Session Manager (recommended)

@@ -6,6 +6,7 @@
 const { Compute } = require('@google-cloud/compute');
 const crypto = require('crypto');
 const { encryptData, decryptData } = require('./encryption');
+const logger = require('../utils/logger');
 
 class GCPComputeEngineService {
   constructor() {
@@ -30,10 +31,10 @@ class GCPComputeEngineService {
         projectId: this.projectId
       });
 
-      console.log(`✅ [GCP] Initialized Compute Engine for project: ${this.projectId}`);
+      logger.info('GCP: Initialized Compute Engine', { projectId: this.projectId });
       return true;
     } catch (error) {
-      console.error('❌ [GCP] Failed to initialize Compute Engine:', error.message);
+      logger.error('GCP: Failed to initialize Compute Engine', { error: error.message, stack: error.stack });
       throw new Error(`GCP initialization failed: ${error.message}`);
     }
   }
@@ -105,13 +106,13 @@ class GCPComputeEngineService {
         }
       };
 
-      console.log(`🚀 [GCP] Creating instance: ${instanceName} in zone ${config.zone}`);
+      logger.info('GCP: Creating instance', { instanceName, zone: config.zone, machineType });
 
       // Create the VM
       const [vm, operation] = await zone.createVM(instanceName, vmConfig);
 
       // Wait for creation to complete
-      console.log('⏳ [GCP] Waiting for instance creation...');
+      logger.info('GCP: Waiting for instance creation', { instanceName });
       await operation.promise();
 
       // Get instance details
@@ -129,13 +130,17 @@ class GCPComputeEngineService {
         createdAt: metadata.creationTimestamp
       };
 
-      console.log(`✅ [GCP] Instance created successfully: ${instanceName}`);
-      console.log(`   Public IP: ${instanceInfo.publicIp}`);
+      logger.info('GCP: Instance created successfully', {
+        instanceName,
+        publicIp: instanceInfo.publicIp,
+        privateIp: instanceInfo.privateIp,
+        zone: config.zone
+      });
 
       return instanceInfo;
 
     } catch (error) {
-      console.error('❌ [GCP] Failed to create instance:', error.message);
+      logger.error('GCP: Failed to create instance', { instanceName, error: error.message, stack: error.stack });
       throw new Error(`Failed to create GCP instance: ${error.message}`);
     }
   }
@@ -159,7 +164,7 @@ class GCPComputeEngineService {
         machineType: metadata.machineType.split('/').pop()
       };
     } catch (error) {
-      console.error(`❌ [GCP] Failed to get instance ${instanceName}:`, error.message);
+      logger.error('GCP: Failed to get instance', { instanceName, zone, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -172,14 +177,14 @@ class GCPComputeEngineService {
       const zoneObj = this.compute.zone(zone);
       const vm = zoneObj.vm(instanceName);
 
-      console.log(`🛑 [GCP] Stopping instance: ${instanceName}`);
+      logger.info('GCP: Stopping instance', { instanceName, zone });
       const [operation] = await vm.stop();
       await operation.promise();
 
-      console.log(`✅ [GCP] Instance stopped: ${instanceName}`);
+      logger.info('GCP: Instance stopped', { instanceName, zone });
       return true;
     } catch (error) {
-      console.error(`❌ [GCP] Failed to stop instance ${instanceName}:`, error.message);
+      logger.error('GCP: Failed to stop instance', { instanceName, zone, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -192,14 +197,14 @@ class GCPComputeEngineService {
       const zoneObj = this.compute.zone(zone);
       const vm = zoneObj.vm(instanceName);
 
-      console.log(`🗑️  [GCP] Deleting instance: ${instanceName}`);
+      logger.info('GCP: Deleting instance', { instanceName, zone });
       const [operation] = await vm.delete();
       await operation.promise();
 
-      console.log(`✅ [GCP] Instance deleted: ${instanceName}`);
+      logger.info('GCP: Instance deleted', { instanceName, zone });
       return true;
     } catch (error) {
-      console.error(`❌ [GCP] Failed to delete instance ${instanceName}:`, error.message);
+      logger.error('GCP: Failed to delete instance', { instanceName, zone, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -242,7 +247,7 @@ class GCPComputeEngineService {
           const [exists] = await firewall.exists();
 
           if (!exists) {
-            console.log(`🔥 [GCP] Creating firewall rule: ${rule.name}`);
+            logger.info('GCP: Creating firewall rule', { ruleName: rule.name });
             await this.compute.createFirewall(rule.name, {
               allowed: rule.allowed,
               sourceRanges: rule.sourceRanges,
@@ -250,18 +255,18 @@ class GCPComputeEngineService {
               direction: rule.direction,
               priority: rule.priority
             });
-            console.log(`✅ [GCP] Firewall rule created: ${rule.name}`);
+            logger.info('GCP: Firewall rule created', { ruleName: rule.name });
           } else {
-            console.log(`✓ [GCP] Firewall rule already exists: ${rule.name}`);
+            logger.info('GCP: Firewall rule already exists', { ruleName: rule.name });
           }
         } catch (error) {
-          console.warn(`⚠️  [GCP] Could not create firewall rule ${rule.name}:`, error.message);
+          logger.warn('GCP: Could not create firewall rule', { ruleName: rule.name, error: error.message });
         }
       }
 
       return true;
     } catch (error) {
-      console.error('❌ [GCP] Failed to ensure firewall rules:', error.message);
+      logger.error('GCP: Failed to ensure firewall rules', { error: error.message, stack: error.stack });
       return false;
     }
   }

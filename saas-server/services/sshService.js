@@ -46,13 +46,13 @@ class SSHService {
       };
 
       conn.on('ready', () => {
-        console.log(`✅ [SSH] Connected to ${host}:${port} as ${username}`);
+        logger.info(`[SSH] Connected to ${host}:${port} as ${username}`);
         this.connections.set(connId, conn);
         resolve(conn);
       });
 
       conn.on('error', (err) => {
-        console.error(`❌ [SSH] Connection error to ${host}:`, err.message);
+        logger.error('[SSH] Connection error to ${host}:`, err.message);
         reject(err);
       });
 
@@ -176,7 +176,7 @@ class SSHService {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`🔄 [SSH] Attempting to connect to ${host} (attempt ${attempt}/${maxAttempts})...`);
+        logger.info(`[SSH] Attempting to connect to ${host} (attempt ${attempt}/${maxAttempts})...`);
         const conn = await this.connect(host, {
           port,
           username,
@@ -188,10 +188,10 @@ class SSHService {
         // Try a simple command to verify connection
         await this.executeCommand(conn, 'echo "SSH Ready"', { timeout: 5000 });
 
-        console.log(`✅ [SSH] Server is ready for connections`);
+        logger.info('[SSH] Server is ready for connections`);
         return conn;
       } catch (error) {
-        console.log(`⏳ [SSH] Connection attempt ${attempt} failed: ${error.message}`);
+        logger.info(`[SSH] Connection attempt ${attempt} failed: ${error.message}`);
 
         if (attempt < maxAttempts) {
           // Wait before retrying (exponential backoff)
@@ -218,7 +218,7 @@ class SSHService {
    */
   disconnectAll() {
     for (const [connId, conn] of this.connections) {
-      console.log(`🔌 [SSH] Disconnecting ${connId}`);
+      logger.info(`[SSH] Disconnecting ${connId}`);
       conn.end();
     }
     this.connections.clear();

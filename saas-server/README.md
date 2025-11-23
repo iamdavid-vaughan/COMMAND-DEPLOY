@@ -1,6 +1,6 @@
 # Focal Deploy SaaS Server
 
-This is the backend API server for Focal Deploy SaaS platform. It handles user authentication, credential encryption, deployment orchestration, usage tracking, and billing.
+This is the backend API server for Focal Deploy SaaS platform. It handles user authentication, credential encryption, **multi-cloud deployment orchestration** (AWS, Google Cloud, Microsoft Azure), usage tracking, and billing.
 
 ## Architecture Overview
 
@@ -28,7 +28,11 @@ This is the backend API server for Focal Deploy SaaS platform. It handles user a
 - **JWT Authentication**: Secure token-based authentication
 - **AES-256-GCM Encryption**: Military-grade credential encryption
 - **Just-In-Time Credentials**: Credentials decrypted only when needed
-- **License Tier Management**: Basic, Professional, and Enterprise tiers
+- **Multi-Cloud Support**:
+  - AWS (EC2, S3, VPC, Security Groups)
+  - Google Cloud (Compute Engine, Cloud Storage)
+  - Microsoft Azure (Virtual Machines, VNets, NSGs, Public IPs)
+- **License Tier Management**: Starter, Professional, Max, Enterprise, and DFY tiers
 - **Usage Tracking**: Track API calls, deployments, and resource usage
 - **Rate Limiting**: Protect API from abuse
 - **EULA Enforcement**: Require EULA acceptance before usage
@@ -113,12 +117,26 @@ ALLOWED_ORIGINS=https://dashboard.focuswithfocal.com
 - `DELETE /api/deployments/:id` - Delete deployment
 - `POST /api/deployments/:id/execute` - Execute deployment
 
-### Credentials
+### AWS Credentials
 - `POST /api/credentials` - Store encrypted AWS credentials
 - `GET /api/credentials` - Get encrypted credentials (JIT decryption)
 - `PUT /api/credentials` - Update credentials
 - `DELETE /api/credentials` - Delete credentials
 - `POST /api/credentials/test` - Test credential validity
+
+### GCP Credentials
+- `GET /api/gcp-credentials` - List GCP service account credentials
+- `POST /api/gcp-credentials` - Store new GCP service account
+- `PATCH /api/gcp-credentials/:id` - Update GCP credentials
+- `DELETE /api/gcp-credentials/:id` - Delete GCP credentials
+- `POST /api/gcp-credentials/:id/test` - Test GCP credentials
+
+### Azure Credentials
+- `GET /api/azure-credentials` - List Azure service principal credentials
+- `POST /api/azure-credentials` - Store new Azure credentials (subscriptionId, tenantId, clientId, clientSecret)
+- `PATCH /api/azure-credentials/:id` - Update Azure credentials
+- `DELETE /api/azure-credentials/:id` - Delete Azure credentials
+- `POST /api/azure-credentials/:id/test` - Test Azure credentials
 
 ### Usage
 - `GET /api/usage` - Get usage statistics

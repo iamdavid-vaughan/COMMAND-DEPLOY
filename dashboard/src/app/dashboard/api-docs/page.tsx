@@ -16,7 +16,7 @@ export default function APIDocsPage() {
   const { user, token } = useAuthStore();
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.focuswithfocal.io';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.focuswithfocal.com';
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -419,7 +419,7 @@ print(new_deployment)`}
         </p>
         <div className="mt-4 flex items-center justify-center space-x-4">
           <a
-            href="mailto:support@focuswithfocal.io"
+            href="mailto:support@focuswithfocal.com"
             className="text-blue-600 hover:text-blue-500 font-medium"
           >
             Email Support

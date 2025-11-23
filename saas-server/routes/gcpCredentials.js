@@ -5,6 +5,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { getModels } = require('../models');
+const logger = require('../utils/logger');
 const { encryptData, decryptData } = require('../services/encryption');
 
 const router = express.Router();
@@ -37,7 +38,7 @@ router.get('/', async (req, res, next) => {
     });
 
   } catch (error) {
-    console.error('❌ [GCP Credentials] Error listing credentials:', error);
+    logger.error('❌ [GCP Credentials] Error listing credentials:', error);
     next(error);
   }
 });
@@ -109,7 +110,7 @@ router.post('/',
         is_default: isDefault
       });
 
-      console.log(`✅ [GCP Credentials] Created credentials for project: ${projectId}`);
+      logger.info(`[GCP Credentials] Created credentials for project: ${projectId}`);
 
       res.status(201).json({
         success: true,
@@ -125,7 +126,7 @@ router.post('/',
       });
 
     } catch (error) {
-      console.error('❌ [GCP Credentials] Error storing credentials:', error);
+      logger.error('❌ [GCP Credentials] Error storing credentials:', error);
       next(error);
     }
   }
@@ -195,7 +196,7 @@ router.patch('/:id',
       // Update credential
       await credential.update(updates);
 
-      console.log(`✅ [GCP Credentials] Updated credentials: ${id}`);
+      logger.info(`[GCP Credentials] Updated credentials: ${id}`);
 
       res.json({
         success: true,
@@ -211,7 +212,7 @@ router.patch('/:id',
       });
 
     } catch (error) {
-      console.error('❌ [GCP Credentials] Error updating credentials:', error);
+      logger.error('❌ [GCP Credentials] Error updating credentials:', error);
       next(error);
     }
   }
@@ -265,7 +266,7 @@ router.delete('/:id',
 
       await credential.destroy();
 
-      console.log(`✅ [GCP Credentials] Deleted credentials: ${id}`);
+      logger.info(`[GCP Credentials] Deleted credentials: ${id}`);
 
       res.json({
         success: true,
@@ -273,7 +274,7 @@ router.delete('/:id',
       });
 
     } catch (error) {
-      console.error('❌ [GCP Credentials] Error deleting credentials:', error);
+      logger.error('❌ [GCP Credentials] Error deleting credentials:', error);
       next(error);
     }
   }
@@ -313,7 +314,7 @@ router.post('/:id/test',
       const gcpService = new GCPComputeEngineService();
       await gcpService.initialize(credential.service_account_key, credential.project_id);
 
-      console.log(`✅ [GCP Credentials] Test successful for: ${id}`);
+      logger.info(`[GCP Credentials] Test successful for: ${id}`);
 
       res.json({
         success: true,
@@ -322,7 +323,7 @@ router.post('/:id/test',
       });
 
     } catch (error) {
-      console.error('❌ [GCP Credentials] Test failed:', error.message);
+      logger.error('❌ [GCP Credentials] Test failed:', error.message);
       res.status(400).json({
         error: 'Credential test failed',
         message: error.message

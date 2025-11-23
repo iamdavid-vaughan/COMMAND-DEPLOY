@@ -23,7 +23,7 @@ router.get('/stats', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error fetching storage stats:', error);
+    logger.error('[STORAGE API] Error fetching storage stats:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch storage statistics',
@@ -46,7 +46,7 @@ router.get('/quota', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error checking quota:', error);
+    logger.error('[STORAGE API] Error checking quota:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to check storage quota',
@@ -72,7 +72,7 @@ router.post('/calculate', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error calculating storage:', error);
+    logger.error('[STORAGE API] Error calculating storage:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to calculate storage usage',
@@ -117,7 +117,7 @@ router.post('/init', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error initializing storage:', error);
+    logger.error('[STORAGE API] Error initializing storage:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to initialize storage',
@@ -159,7 +159,7 @@ router.delete('/deployment/:deploymentId', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error deleting deployment storage:', error);
+    logger.error('[STORAGE API] Error deleting deployment storage:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete deployment storage',
@@ -207,7 +207,7 @@ router.get('/usage-by-tier', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[STORAGE API] Error fetching usage by tier:', error);
+    logger.error('[STORAGE API] Error fetching usage by tier:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch usage by tier',

@@ -4,6 +4,7 @@
 
 const { createClient } = require('redis');
 const chalk = require('chalk');
+const logger = require('../utils/logger');
 
 let redisClient = null;
 
@@ -20,28 +21,28 @@ async function initializeRedis() {
     });
 
     redisClient.on('error', (err) => {
-      console.error(chalk.red('Redis Client Error:'), err);
+      logger.error('Redis: Client error', { error: err.message });
     });
 
     redisClient.on('connect', () => {
-      console.log(chalk.green('✓ Redis client connecting...'));
+      logger.info('Redis: Client connecting');
     });
 
     redisClient.on('ready', () => {
-      console.log(chalk.green('✓ Redis client ready'));
+      logger.info('Redis: Client ready');
     });
 
     await redisClient.connect();
 
     // Test connection
     await redisClient.ping();
-    console.log(chalk.green('✓ Redis connection established successfully'));
+    logger.info('Redis: Connection established successfully');
 
     return redisClient;
   } catch (error) {
-    console.error(chalk.red('✗ Unable to connect to Redis:'), error.message);
+    logger.error('Redis: Unable to connect', { error: error.message, stack: error.stack });
     // Don't throw - Redis is optional for basic functionality
-    console.warn(chalk.yellow('⚠ Continuing without Redis caching'));
+    logger.warn('Redis: Continuing without Redis caching');
     return null;
   }
 }
@@ -59,7 +60,7 @@ function getRedis() {
 async function closeRedis() {
   if (redisClient && redisClient.isOpen) {
     await redisClient.quit();
-    console.log(chalk.yellow('Redis connection closed'));
+    logger.info('Redis: Connection closed');
   }
 }
 

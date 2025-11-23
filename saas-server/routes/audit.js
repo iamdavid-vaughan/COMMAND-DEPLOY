@@ -19,6 +19,7 @@
 const express = require('express');
 const router = express.Router();
 const { AuditLogger } = require('../../lib/utils/audit-logger');
+const logger = require('../utils/logger');
 
 // Middleware to check authentication
 const requireAuth = (req, res, next) => {
@@ -56,15 +57,20 @@ router.get('/logs', requireAuth, async (req, res) => {
       filters.endDate = new Date(req.query.endDate);
     }
 
-    const entries = await auditLogger.query(filters);
+    let entries = await auditLogger.query(filters);
+
+    // Ensure entries is always an array
+    if (!Array.isArray(entries)) {
+      entries = [];
+    }
 
     res.json({
       success: true,
-      entries,
+      logs: entries,
       count: entries.length
     });
   } catch (error) {
-    console.error('Error querying audit logs:', error);
+    logger.error('Error querying audit logs:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to query audit logs',
@@ -83,18 +89,56 @@ router.get('/statistics', requireAuth, async (req, res) => {
       logPath: `./audit-logs/${req.user.userId}-audit.json`
     });
 
-    const stats = await auditLogger.getStatistics();
+    let stats = await auditLogger.getStatistics();
+
+    // Transform backend format to frontend format
+    if (!stats || typeof stats !== 'object') {
+      stats = {
+        totalEvents: 0,
+        byCategory: {},
+        bySeverity: {},
+        byAction: {},
+        failedEvents: 0,
+        last24Hours: 0
+      };
+    }
+
+    // Count unique users from recent entries
+    const entries = await auditLogger.query({ limit: 1000 });
+    const uniqueUsers = new Set(entries.map(e => e.user)).size;
+
+    // Count critical events
+    const criticalEvents = entries.filter(e => e.severity === 'critical').length;
+
+    // Transform to frontend expected format
+    const transformedStats = {
+      totalEvents: stats.totalEvents || 0,
+      criticalEvents: criticalEvents || 0,
+      failedActions: stats.failedEvents || 0,
+      uniqueUsers: uniqueUsers || 0,
+      categoryCounts: stats.byCategory || {},
+      severityCounts: stats.bySeverity || {},
+      recentActivity: stats.last24Hours || 0
+    };
 
     res.json({
       success: true,
-      statistics: stats
+      statistics: transformedStats
     });
   } catch (error) {
-    console.error('Error getting audit statistics:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get audit statistics',
-      message: error.message
+    logger.error('Error getting audit statistics:', error);
+    // Return empty stats instead of error
+    res.json({
+      success: true,
+      statistics: {
+        totalEvents: 0,
+        criticalEvents: 0,
+        failedActions: 0,
+        uniqueUsers: 0,
+        categoryCounts: {},
+        severityCounts: {},
+        recentActivity: 0
+      }
     });
   }
 });
@@ -135,7 +179,7 @@ router.post('/log', requireAuth, async (req, res) => {
       entry
     });
   } catch (error) {
-    console.error('Error creating audit log entry:', error);
+    logger.error('Error creating audit log entry:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to create audit log entry',
@@ -162,13 +206,13 @@ router.post('/export', requireAuth, async (req, res) => {
     // Send the file for download
     res.download(outputPath, `audit-logs-${new Date().toISOString().split('T')[0]}.json`, (err) => {
       if (err) {
-        console.error('Error sending file:', err);
+        logger.error('Error sending file:', err);
       }
       // Optionally delete the file after sending
       // fs.unlinkSync(outputPath);
     });
   } catch (error) {
-    console.error('Error exporting audit logs:', error);
+    logger.error('Error exporting audit logs:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to export audit logs',
@@ -200,7 +244,7 @@ router.delete('/clear', requireAuth, async (req, res) => {
       backupPath
     });
   } catch (error) {
-    console.error('Error clearing audit logs:', error);
+    logger.error('Error clearing audit logs:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to clear audit logs',

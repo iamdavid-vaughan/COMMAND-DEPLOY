@@ -1,0 +1,65 @@
+{
+  "projectName": "TSG-My-SOLO-TEST-APP-5",
+  "region": "us-east-1",
+  "startedAt": "2025-11-22T19:10:23.143Z",
+  "status": "completed",
+  "resources": {
+    "sshKey": {
+      "keyPairName": "tsg-my-solo-test-app-5-keypair-1763838622930",
+      "privateKeyPath": "/home/davidvaughan/.ssh/tsg-my-solo-test-app-5-keypair-1763838622930",
+      "existed": false
+    },
+    "securityGroup": {
+      "securityGroupId": "sg-0ed32388fcaaf0680",
+      "existed": false
+    },
+    "s3Bucket": {
+      "bucketName": "focal-deploy-tsg-my-solo-test-app-5-useast1-38625224",
+      "existed": false
+    },
+    "ec2Instance": {
+      "instanceId": "i-0781775a7a493f0e0",
+      "privateIpAddress": "172.31.67.161",
+      "publicIpAddress": "3.239.11.28",
+      "allocationId": null,
+      "state": "running",
+      "instanceType": "t3.micro",
+      "launchedAt": "2025-11-22T19:10:37.000Z",
+      "ssmEnabled": true,
+      "emergencyAccess": {
+        "ssmSessionManager": true,
+        "roleName": "TSG-My-SOLO-TEST-APP-5-ssm-role",
+        "instanceProfileName": "TSG-My-SOLO-TEST-APP-5-ssm-instance-profile"
+      }
+    }
+  },
+  "completedAt": "2025-11-22T19:10:48.476Z",
+  "security": {
+    "i-0781775a7a493f0e0": {
+      "ssh": {
+        "customPort": 9025,
+        "keyAuthOnly": true,
+        "rootLoginDisabled": true,
+        "deploymentUserCreated": true,
+        "username": "lukeskywalker",
+        "sshHardeningApplied": true,
+        "configuredAt": "2025-11-22T19:11:22.576Z"
+      },
+      "lastUpdated": "2025-11-22T19:12:07.093Z",
+      "firewall": {
+        "enabled": true,
+        "sshPort": 9025,
+        "httpAllowed": true,
+        "httpsAllowed": true,
+        "configuredAt": "2025-11-22T19:11:55.059Z"
+      },
+      "fail2ban": {
+        "enabled": true,
+        "sshJailEnabled": true,
+        "maxRetry": 3,
+        "banTime": 3600,
+        "configuredAt": "2025-11-22T19:12:07.093Z"
+      }
+    }
+  }
+}

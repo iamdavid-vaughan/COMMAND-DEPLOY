@@ -49,7 +49,7 @@ router.get('/', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('List API keys error:', error);
+    logger.error('List API keys error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve API keys',
@@ -121,7 +121,7 @@ router.post('/', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create API key error:', error);
+    logger.error('Create API key error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to create API key',
@@ -167,7 +167,7 @@ router.patch('/:id', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update API key error:', error);
+    logger.error('Update API key error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update API key',
@@ -212,7 +212,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Revoke API key error:', error);
+    logger.error('Revoke API key error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to revoke API key',

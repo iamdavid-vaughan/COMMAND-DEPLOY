@@ -12,17 +12,22 @@ import {
   Download,
   Edit,
   XCircle,
+  Users,
+  Plus,
+  Minus,
 } from 'lucide-react';
 
 interface Subscription {
-  id: string;
+  id: string | null;
   plan: string;
   billingCycle: string;
   amount: number;
   status: string;
   currentPeriodStart: string;
-  currentPeriodEnd: string;
+  currentPeriodEnd: string | null;
   cancelledAt?: string;
+  isLegacy?: boolean;
+  requiresPayment?: boolean;
 }
 
 interface Invoice {
@@ -51,6 +56,26 @@ interface Plan {
   };
 }
 
+interface SeatInfo {
+  total: number;
+  used: number;
+  remaining: number;
+  tier: string;
+  pricePerSeat: number;
+}
+
+interface SeatPreview {
+  currentSeats: number;
+  newSeats: number;
+  seatsChanged: number;
+  action: 'add' | 'remove';
+  pricePerSeat: number;
+  amount: number;
+  remainingDays: number;
+  totalDays: number;
+  message: string;
+}
+
 export default function BillingPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -72,6 +97,14 @@ export default function BillingPage() {
   });
   const [updatingPayment, setUpdatingPayment] = useState(false);
 
+  // Seat management state
+  const [seatInfo, setSeatInfo] = useState<SeatInfo | null>(null);
+  const [showSeatModal, setShowSeatModal] = useState(false);
+  const [seatAction, setSeatAction] = useState<'add' | 'remove'>('add');
+  const [seatCount, setSeatCount] = useState(1);
+  const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
+  const [processingSeats, setProcessingSeats] = useState(false);
+
   useEffect(() => {
     fetchBillingData();
   }, []);
@@ -81,15 +114,17 @@ export default function BillingPage() {
       setLoading(true);
       setError(null);
 
-      const [subscriptionResponse, invoicesResponse, plansResponse] = await Promise.all([
+      const [subscriptionResponse, invoicesResponse, plansResponse, seatsResponse] = await Promise.all([
         billingAPI.getSubscription(),
         billingAPI.getInvoices(),
         billingAPI.getPlans(),
+        billingAPI.getSeats().catch(() => ({ data: { seats: null } })), // Gracefully handle if seats not available
       ]);
 
       setSubscription(subscriptionResponse.data.subscription);
       setInvoices(invoicesResponse.data.invoices || []);
       setPlans(plansResponse.data.plans || []);
+      setSeatInfo(seatsResponse.data.seats);
       setLoading(false);
     } catch (err: any) {
       console.error('Failed to fetch billing data:', err);
@@ -122,15 +157,44 @@ export default function BillingPage() {
       return;
     }
 
+    // If this is a legacy subscription (no payment set up), require payment info
+    if (subscription?.requiresPayment) {
+      if (!paymentInfo.cardNumber || !paymentInfo.expirationDate || !paymentInfo.cardCode || !paymentInfo.firstName || !paymentInfo.lastName || !paymentInfo.zip) {
+        setError('Please fill in all payment information to activate your subscription');
+        return;
+      }
+    }
+
     try {
       setUpgrading(true);
       setError(null);
-      await billingAPI.updateSubscription({
-        plan: selectedPlan,
-        billingCycle: selectedBillingCycle,
-      });
-      alert('Plan updated successfully');
+
+      // If user has no real subscription (requiresPayment), create new subscription
+      if (subscription?.requiresPayment || !subscription?.id) {
+        await billingAPI.subscribe({
+          plan: selectedPlan,
+          billingCycle: selectedBillingCycle,
+          paymentProfile: {
+            cardNumber: paymentInfo.cardNumber.replace(/\s/g, ''),
+            expirationDate: paymentInfo.expirationDate,
+            cardCode: paymentInfo.cardCode,
+            firstName: paymentInfo.firstName,
+            lastName: paymentInfo.lastName,
+            zip: paymentInfo.zip,
+          },
+        });
+        alert('Subscription activated successfully!');
+      } else {
+        // Update existing subscription
+        await billingAPI.updateSubscription({
+          plan: selectedPlan,
+          billingCycle: selectedBillingCycle,
+        });
+        alert('Plan updated successfully');
+      }
+
       setShowUpgrade(false);
+      setPaymentInfo({ cardNumber: '', expirationDate: '', cardCode: '', firstName: '', lastName: '', zip: '' });
       fetchBillingData();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update plan');
@@ -166,6 +230,61 @@ export default function BillingPage() {
       setError(err.response?.data?.message || 'Failed to update payment method');
     } finally {
       setUpdatingPayment(false);
+    }
+  };
+
+  const openSeatModal = (action: 'add' | 'remove') => {
+    setSeatAction(action);
+    setSeatCount(1);
+    setSeatPreview(null);
+    setShowSeatModal(true);
+    setError(null);
+  };
+
+  const fetchSeatPreview = async () => {
+    if (seatCount < 1) {
+      setError('Seat count must be at least 1');
+      return;
+    }
+
+    try {
+      const response = await billingAPI.previewSeats(seatAction, seatCount);
+      setSeatPreview(response.data.preview);
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to preview seat changes');
+      setSeatPreview(null);
+    }
+  };
+
+  const handleSeatChange = async () => {
+    if (!seatPreview) {
+      setError('Please preview the changes first');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to ${seatAction} ${seatCount} seat(s)?`)) {
+      return;
+    }
+
+    try {
+      setProcessingSeats(true);
+      setError(null);
+
+      if (seatAction === 'add') {
+        await billingAPI.addSeats(seatCount);
+        alert(`Successfully added ${seatCount} seat(s) to your account`);
+      } else {
+        await billingAPI.removeSeats(seatCount);
+        alert(`Successfully removed ${seatCount} seat(s) from your account`);
+      }
+
+      setShowSeatModal(false);
+      fetchBillingData();
+    } catch (err: any) {
+      setError(err.response?.data?.message || `Failed to ${seatAction} seats`);
+    } finally {
+      setProcessingSeats(false);
     }
   };
 
@@ -249,17 +368,39 @@ export default function BillingPage() {
 
         {subscription ? (
           <div className="px-6 py-5">
+            {/* Payment Required Warning */}
+            {subscription.requiresPayment && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-yellow-800">Payment Setup Required</h4>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Your account has a <strong>{getPlanDisplayName(subscription.plan)}</strong> plan, but payment has not been set up yet.
+                      Click "Activate Subscription" below to add your payment method and start using all features.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Plan Info */}
               <div>
                 <div className="flex items-center mb-2">
-                  {getStatusIcon(subscription.status)}
+                  {subscription.requiresPayment ? (
+                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                  ) : (
+                    getStatusIcon(subscription.status)
+                  )}
                   <span className="ml-2 text-sm font-medium text-gray-500">Status</span>
                 </div>
                 <p className="text-2xl font-bold text-gray-900">
                   {getPlanDisplayName(subscription.plan)}
                 </p>
-                <p className="text-sm text-gray-500 capitalize">{subscription.billingCycle}</p>
+                <p className="text-sm text-gray-500 capitalize">
+                  {subscription.requiresPayment ? 'Payment Required' : subscription.billingCycle}
+                </p>
               </div>
 
               {/* Billing Amount */}
@@ -269,10 +410,10 @@ export default function BillingPage() {
                   <span className="ml-2 text-sm font-medium text-gray-500">Amount</span>
                 </div>
                 <p className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(subscription.amount)}
+                  {subscription.requiresPayment ? 'Not Set' : formatCurrency(subscription.amount)}
                 </p>
                 <p className="text-sm text-gray-500">
-                  per {subscription.billingCycle === 'monthly' ? 'month' : 'year'}
+                  {subscription.requiresPayment ? 'Select plan to see pricing' : `per ${subscription.billingCycle === 'monthly' ? 'month' : 'year'}`}
                 </p>
               </div>
 
@@ -281,21 +422,30 @@ export default function BillingPage() {
                 <div className="flex items-center mb-2">
                   <Calendar className="w-5 h-5 text-gray-400" />
                   <span className="ml-2 text-sm font-medium text-gray-500">
-                    {subscription.status === 'cancelled' ? 'Access Until' : 'Next Billing'}
+                    {subscription.status === 'cancelled' ? 'Access Until' : subscription.requiresPayment ? 'Status' : 'Next Billing'}
                   </span>
                 </div>
                 <p className="text-2xl font-bold text-gray-900">
-                  {formatDate(subscription.currentPeriodEnd)}
+                  {subscription.requiresPayment ? 'Inactive' : subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : 'N/A'}
                 </p>
                 <p className="text-sm text-gray-500">
-                  {subscription.status === 'cancelled' ? 'Cancelled' : 'Auto-renew'}
+                  {subscription.requiresPayment ? 'Pending activation' : subscription.status === 'cancelled' ? 'Cancelled' : 'Auto-renew'}
                 </p>
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="mt-6 flex space-x-3">
-              {subscription.status === 'active' && (
+              {subscription.requiresPayment && (
+                <button
+                  onClick={() => setShowUpgrade(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Activate Subscription
+                </button>
+              )}
+              {subscription.status === 'active' && !subscription.requiresPayment && (
                 <>
                   <button
                     onClick={() => setShowUpgrade(true)}
@@ -320,7 +470,7 @@ export default function BillingPage() {
                   </button>
                 </>
               )}
-              {subscription.status === 'cancelled' && (
+              {subscription.status === 'cancelled' && !subscription.requiresPayment && (
                 <button
                   onClick={() => setShowUpgrade(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
@@ -349,6 +499,84 @@ export default function BillingPage() {
           </div>
         )}
       </div>
+
+      {/* Seat Management */}
+      {seatInfo && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-5 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900 flex items-center">
+              <Users className="w-5 h-5 mr-2" />
+              Seat Management
+            </h2>
+          </div>
+
+          <div className="px-6 py-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              {/* Total Seats */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <span className="ml-2 text-sm font-medium text-blue-900">Total Seats</span>
+                </div>
+                <p className="text-3xl font-bold text-blue-900">{seatInfo.total}</p>
+              </div>
+
+              {/* Used Seats */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="ml-2 text-sm font-medium text-green-900">Used Seats</span>
+                </div>
+                <p className="text-3xl font-bold text-green-900">{seatInfo.used}</p>
+              </div>
+
+              {/* Remaining Seats */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <AlertCircle className="w-5 h-5 text-purple-600" />
+                  <span className="ml-2 text-sm font-medium text-purple-900">Remaining</span>
+                </div>
+                <p className="text-3xl font-bold text-purple-900">{seatInfo.remaining}</p>
+              </div>
+
+              {/* Price Per Seat */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <DollarSign className="w-5 h-5 text-gray-600" />
+                  <span className="ml-2 text-sm font-medium text-gray-900">Price/Seat</span>
+                </div>
+                <p className="text-3xl font-bold text-gray-900">${seatInfo.pricePerSeat}</p>
+                <p className="text-xs text-gray-500 mt-1">per month</p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => openSeatModal('add')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Seats
+              </button>
+              <button
+                onClick={() => openSeatModal('remove')}
+                disabled={seatInfo.remaining === 0}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Minus className="w-4 h-4 mr-2" />
+                Remove Seats
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-900">
+                <strong>Note:</strong> Adding seats will charge you a prorated amount based on your remaining billing cycle. Removing seats will credit your next billing cycle.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invoices */}
       <div className="bg-white shadow rounded-lg">
@@ -478,13 +706,13 @@ export default function BillingPage() {
               </div>
             </div>
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
               {plans.map((plan) => {
                 const price =
                   selectedBillingCycle === 'monthly'
                     ? plan.monthlyPrice
                     : plan.yearlyPrice;
-                const isCurrentPlan = subscription?.plan === plan.id;
+                const isCurrentPlan = subscription?.plan === plan.id && !subscription?.requiresPayment;
 
                 return (
                   <div
@@ -527,6 +755,105 @@ export default function BillingPage() {
               })}
             </div>
 
+            {/* Payment Information - Required for new subscriptions */}
+            {subscription?.requiresPayment && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-4">Payment Information Required</h4>
+                <p className="text-sm text-yellow-800 mb-4">
+                  Enter your payment details to activate your subscription.
+                </p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        placeholder="John"
+                        value={paymentInfo.firstName}
+                        onChange={(e) => setPaymentInfo({ ...paymentInfo, firstName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={upgrading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        placeholder="Doe"
+                        value={paymentInfo.lastName}
+                        onChange={(e) => setPaymentInfo({ ...paymentInfo, lastName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={upgrading}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Card Number *</label>
+                    <input
+                      type="text"
+                      placeholder="1234 5678 9012 3456"
+                      maxLength={19}
+                      value={paymentInfo.cardNumber}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\s/g, '');
+                        const formatted = value.match(/.{1,4}/g)?.join(' ') || value;
+                        setPaymentInfo({ ...paymentInfo, cardNumber: formatted });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={upgrading}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Expiration *</label>
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        maxLength={5}
+                        value={paymentInfo.expirationDate}
+                        onChange={(e) => {
+                          let value = e.target.value.replace(/\D/g, '');
+                          if (value.length >= 2) {
+                            value = value.slice(0, 2) + '/' + value.slice(2, 4);
+                          }
+                          setPaymentInfo({ ...paymentInfo, expirationDate: value });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={upgrading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CVV *</label>
+                      <input
+                        type="text"
+                        placeholder="123"
+                        maxLength={4}
+                        value={paymentInfo.cardCode}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          setPaymentInfo({ ...paymentInfo, cardCode: value });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={upgrading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ZIP *</label>
+                      <input
+                        type="text"
+                        placeholder="12345"
+                        maxLength={10}
+                        value={paymentInfo.zip}
+                        onChange={(e) => setPaymentInfo({ ...paymentInfo, zip: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={upgrading}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -543,7 +870,7 @@ export default function BillingPage() {
                 disabled={!selectedPlan || upgrading}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {upgrading ? 'Updating...' : 'Update Plan'}
+                {upgrading ? 'Processing...' : subscription?.requiresPayment ? 'Activate Subscription' : 'Update Plan'}
               </button>
             </div>
           </div>
@@ -713,6 +1040,132 @@ export default function BillingPage() {
               >
                 {updatingPayment ? 'Updating...' : 'Update Payment'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Seat Management Modal */}
+      {showSeatModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative mx-auto p-8 border w-full max-w-md shadow-lg rounded-lg bg-white">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">
+                {seatAction === 'add' ? 'Add Seats' : 'Remove Seats'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSeatModal(false);
+                  setError(null);
+                  setSeatPreview(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Seat Count Input */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Number of Seats to {seatAction === 'add' ? 'Add' : 'Remove'}
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={seatCount}
+                onChange={(e) => {
+                  setSeatCount(parseInt(e.target.value) || 1);
+                  setSeatPreview(null);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={processingSeats}
+              />
+            </div>
+
+            {/* Preview Button */}
+            <button
+              onClick={fetchSeatPreview}
+              disabled={processingSeats}
+              className="w-full mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              Preview Cost
+            </button>
+
+            {/* Preview Details */}
+            {seatPreview && (
+              <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                <h4 className="font-semibold text-gray-900">Cost Breakdown</h4>
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-gray-600">Current Seats:</div>
+                  <div className="font-medium text-gray-900">{seatPreview.currentSeats}</div>
+
+                  <div className="text-gray-600">New Seats:</div>
+                  <div className="font-medium text-gray-900">{seatPreview.newSeats}</div>
+
+                  <div className="text-gray-600">Price per Seat:</div>
+                  <div className="font-medium text-gray-900">${seatPreview.pricePerSeat}</div>
+
+                  <div className="text-gray-600">Remaining Days:</div>
+                  <div className="font-medium text-gray-900">
+                    {seatPreview.remainingDays} of {seatPreview.totalDays}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-300">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-900">
+                      {seatAction === 'add' ? 'Charge Today:' : 'Credit Amount:'}
+                    </span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      ${seatPreview.amount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
+                  {seatPreview.message}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSeatModal(false);
+                  setError(null);
+                  setSeatPreview(null);
+                }}
+                disabled={processingSeats}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSeatChange}
+                disabled={!seatPreview || processingSeats}
+                className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                  seatAction === 'add'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {processingSeats ? 'Processing...' : `${seatAction === 'add' ? 'Add' : 'Remove'} Seats`}
+              </button>
+            </div>
+
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-900">
+                <strong>Important:</strong> {seatAction === 'add' ? 'You will be charged immediately for the prorated amount.' : 'Make sure you have removed team members before reducing seats.'}
+              </p>
             </div>
           </div>
         </div>

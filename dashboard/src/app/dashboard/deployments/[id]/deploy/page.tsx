@@ -333,7 +333,7 @@ export default function DeployAppWizard() {
                     className="bg-white border-2 border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition-all text-left"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
+                      <div className="w-12 h-12 rounded-lg bg-blue-500 flex items-center justify-center text-white font-bold text-xl">
                         {template.name.charAt(0)}
                       </div>
                       {template.is_featured && (
@@ -645,7 +645,7 @@ export default function DeployAppWizard() {
             <button
               onClick={handleDeploy}
               disabled={deploying}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all inline-flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-opacity-90 transition-all inline-flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {deploying ? (
                 <>

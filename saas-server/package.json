@@ -20,14 +20,21 @@
   "license": "SEE LICENSE IN ../LICENSE",
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-route-53": "^3.936.0",
     "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-ssm": "^3.936.0",
     "@aws-sdk/client-sts": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@azure/arm-compute": "^22.4.0",
+    "@azure/arm-network": "^34.0.0",
+    "@azure/arm-resources": "^6.1.0",
+    "@azure/arm-subscriptions": "^5.1.0",
+    "@azure/identity": "^4.10.1",
     "@google-cloud/compute": "^4.1.0",
     "@google-cloud/storage": "^7.7.0",
     "archiver": "^7.0.0",
     "authorizenet": "^1.0.10",
-    "axios": "^1.6.2",
+    "axios": "^1.13.2",
     "bcrypt": "^5.1.1",
     "chalk": "^4.1.2",
     "compression": "^1.7.4",
@@ -40,17 +47,20 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.0.2",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.7",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.4",
     "postmark": "^4.0.2",
     "qrcode": "^1.5.3",
     "redis": "^4.6.11",
     "sequelize": "^6.35.1",
+    "socket.io": "^4.8.1",
     "speakeasy": "^2.0.0",
-    "ssh2": "^1.15.0",
-    "uuid": "^9.0.1"
+    "ssh2": "^1.17.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "jest": "^29.7.0",
@@ -60,5 +70,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "overrides": {
+    "axios": "^1.13.2"
   }
 }

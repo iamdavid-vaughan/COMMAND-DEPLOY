@@ -5,6 +5,7 @@
 
 const { getModels } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 /**
  * Delete unverified/incomplete accounts older than 5 days
@@ -36,7 +37,7 @@ async function cleanupIncompleteAccounts() {
     });
 
     if (incompletedUsers.length === 0) {
-      console.log('✅ [CLEANUP] No incomplete accounts to clean up');
+      logger.info('✅ [CLEANUP] No incomplete accounts to clean up');
       return { deleted: 0 };
     }
 
@@ -50,15 +51,15 @@ async function cleanupIncompleteAccounts() {
       }
     });
 
-    console.log(`✅ [CLEANUP] Deleted ${deletedCount} incomplete accounts older than 5 days`);
+    logger.info(`[CLEANUP] Deleted ${deletedCount} incomplete accounts older than 5 days`);
     incompletedUsers.forEach(u => {
-      console.log(`   - ${u.email} (created: ${u.created_at})`);
+      logger.info(`   - ${u.email} (created: ${u.created_at})`);
     });
 
     return { deleted: deletedCount, accounts: incompletedUsers.map(u => u.email) };
 
   } catch (error) {
-    console.error('❌ [CLEANUP] Error cleaning up accounts:', error);
+    logger.error('❌ [CLEANUP] Error cleaning up accounts:', error);
     throw error;
   }
 }
@@ -90,8 +91,8 @@ async function cleanupExpiredTokens() {
       }
     });
 
-    console.log(`✅ [CLEANUP] Deleted ${deletedVerificationTokens} expired verification tokens`);
-    console.log(`✅ [CLEANUP] Deleted ${deletedResetTokens} expired password reset tokens`);
+    logger.info(`[CLEANUP] Deleted ${deletedVerificationTokens} expired verification tokens`);
+    logger.info(`[CLEANUP] Deleted ${deletedResetTokens} expired password reset tokens`);
 
     return {
       verificationTokens: deletedVerificationTokens,
@@ -99,7 +100,7 @@ async function cleanupExpiredTokens() {
     };
 
   } catch (error) {
-    console.error('❌ [CLEANUP] Error cleaning up tokens:', error);
+    logger.error('❌ [CLEANUP] Error cleaning up tokens:', error);
     throw error;
   }
 }
@@ -108,12 +109,12 @@ async function cleanupExpiredTokens() {
  * Run all cleanup tasks
  */
 async function runCleanup() {
-  console.log('🧹 [CLEANUP] Starting account cleanup job...');
+  logger.info('🧹 [CLEANUP] Starting account cleanup job...');
 
   const accountsResult = await cleanupIncompleteAccounts();
   const tokensResult = await cleanupExpiredTokens();
 
-  console.log('✅ [CLEANUP] Cleanup job completed');
+  logger.info('✅ [CLEANUP] Cleanup job completed');
 
   return {
     accounts: accountsResult,
@@ -130,15 +131,15 @@ function initializeCleanupCron() {
 
   // Run every day at 2 AM
   cron.schedule('0 2 * * *', async () => {
-    console.log('⏰ [CLEANUP] Daily cleanup cron job triggered');
+    logger.info('⏰ [CLEANUP] Daily cleanup cron job triggered');
     try {
       await runCleanup();
     } catch (error) {
-      console.error('❌ [CLEANUP] Cron job error:', error);
+      logger.error('❌ [CLEANUP] Cron job error:', error);
     }
   });
 
-  console.log('✅ [CLEANUP] Cleanup cron job initialized (runs daily at 2 AM)');
+  logger.info('✅ [CLEANUP] Cleanup cron job initialized (runs daily at 2 AM)');
 }
 
 module.exports = {

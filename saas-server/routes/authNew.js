@@ -14,6 +14,8 @@ const { getModels } = require('../models');
 const { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
 const billing = require('../services/billing');
 const storageManager = require('../services/storageManager');
+const sessionTrackingService = require('../services/sessionTracking');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -121,7 +123,12 @@ router.post('/register',
       let trialResult = null;
       if (isTrialSignup) {
         try {
-          console.log(`💳 [AUTH] Creating trial subscription for: ${email}`);
+          logger.info('Creating trial subscription', {
+            email,
+            plan,
+            billingCycle,
+            userId: user.id
+          });
 
           // Create trial subscription with Authorize.Net
           trialResult = await billing.createTrialSubscription(
@@ -138,10 +145,20 @@ router.post('/register',
           // Initialize S3 storage for user
           await storageManager.initializeUserStorage(user.id, plan);
 
-          console.log(`✅ [AUTH] Trial subscription created: ${trialResult.subscriptionId}`);
-          console.log(`✅ [AUTH] Trial ends: ${trialResult.trialEndsAt}`);
+          logger.info('Trial subscription created successfully', {
+            subscriptionId: trialResult.subscriptionId,
+            trialEndsAt: trialResult.trialEndsAt,
+            userId: user.id,
+            plan
+          });
         } catch (billingError) {
-          console.error(`❌ [AUTH] Trial subscription failed for ${email}:`, billingError);
+          logger.error('Trial subscription failed', {
+            email,
+            plan,
+            userId: user.id,
+            error: billingError.message,
+            stack: billingError.stack
+          });
 
           // Delete the user if subscription creation failed
           await user.destroy();
@@ -169,7 +186,7 @@ router.post('/register',
       // Send verification email
       await sendVerificationEmail(email, token, name);
 
-      console.log(`✅ [AUTH] User registered: ${email} - Verification email sent`);
+      logger.info('Auth: User registered, verification email sent', { email });
 
       const responseMessage = isTrialSignup
         ? 'Trial subscription activated! Please check your email to verify your account and set your password. Your 7-day trial starts now.'
@@ -189,7 +206,7 @@ router.post('/register',
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Registration error:', error);
+      logger.error('Auth: Registration error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -237,7 +254,7 @@ router.post('/verify-email',
       });
 
       if (!verificationToken) {
-        console.log('⚠️  [AUTH] Invalid or expired verification token');
+        logger.warn('Auth: Invalid or expired verification token', { token: req.body.token });
         return res.status(400).json({
           error: 'Invalid Token',
           message: 'Email verification token is invalid or has expired. Please request a new verification email.'
@@ -260,11 +277,11 @@ router.post('/verify-email',
       // Mark token as used
       await verificationToken.update({ used_at: new Date() });
 
-      console.log(`✅ [AUTH] Email verified and password set for ${user.email}`);
+      logger.info('Auth: Email verified and password set', { email: user.email, userId: user.id });
 
       // Send welcome email (non-blocking)
       sendWelcomeEmail(user.email, `${user.first_name} ${user.last_name}`.trim())
-        .catch(err => console.error('Error sending welcome email:', err));
+        .catch(err => logger.error('Auth: Error sending welcome email', { email: user.email, error: err.message }));
 
       // Generate JWT token
       const jwtToken = generateToken({
@@ -290,7 +307,7 @@ router.post('/verify-email',
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Email verification error:', error);
+      logger.error('Auth: Email verification error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -340,9 +357,9 @@ router.post('/resend-verification',
           `${user.first_name} ${user.last_name}`.trim()
         );
 
-        console.log(`✅ [AUTH] Verification email resent to ${email}`);
+        logger.info('Auth: Verification email resent', { email });
       } else {
-        console.log(`⚠️  [AUTH] Resend verification requested for non-existent or verified email: ${email}`);
+        logger.warn('Auth: Resend verification requested for non-existent or verified email', { email });
       }
 
       // Always return success (prevent email enumeration)
@@ -352,7 +369,7 @@ router.post('/resend-verification',
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Resend verification error:', error);
+      logger.error('Auth: Resend verification error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -452,7 +469,11 @@ router.post('/login',
         superAdminFor: user.super_admin_for || []
       });
 
-      console.log(`✅ [AUTH] Login successful: ${email}`);
+      // Create session
+      await sessionTrackingService.initialize();
+      await sessionTrackingService.createSession(user.id, token, req);
+
+      logger.info('Auth: Login successful', { email, userId: user.id });
 
       res.json({
         message: 'Login successful',
@@ -462,18 +483,79 @@ router.post('/login',
           name: `${user.first_name} ${user.last_name}`.trim(),
           licenseTier: user.license_tier,
           role: user.role || 'user',
-          superAdminFor: user.super_admin_for || []
+          superAdminFor: user.super_admin_for || [],
+          avatarUrl: user.avatar_url || null
         },
         token,
         expiresIn: '7d'
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Login error:', error);
+      logger.error('Auth: Login error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
 );
+
+/**
+ * POST /api/auth/refresh
+ * Refresh JWT token
+ */
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No token provided'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET;
+
+    // Verify old token (even if expired)
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      ignoreExpiration: true
+    });
+
+    // Check if token is within refresh window (30 days)
+    const tokenAge = Date.now() / 1000 - decoded.iat;
+    const maxRefreshAge = 30 * 24 * 60 * 60; // 30 days
+
+    if (tokenAge > maxRefreshAge) {
+      return res.status(401).json({
+        error: 'Token Expired',
+        message: 'Token is too old to refresh. Please log in again.'
+      });
+    }
+
+    // Generate new token
+    const newToken = generateToken({
+      id: decoded.userId,
+      email: decoded.email,
+      licenseTier: decoded.licenseTier,
+      role: decoded.role,
+      superAdminFor: decoded.superAdminFor
+    });
+
+    logger.info('Token refreshed', { email: decoded.email });
+
+    res.json({
+      token: newToken,
+      expiresIn: '7d'
+    });
+
+  } catch (error) {
+    logger.error('Token refresh failed', { error: error.message });
+    return res.status(401).json({
+      error: 'Invalid Token',
+      message: 'Token refresh failed. Please log in again.'
+    });
+  }
+});
 
 /**
  * POST /api/auth/forgot-password
@@ -498,7 +580,7 @@ router.post('/forgot-password',
       if (user && user.email_verified && user.is_active) {
         // OAuth users shouldn't be able to reset password
         if (!user.password_hash && user.oauth_provider) {
-          console.log(`⚠️  [AUTH] Password reset requested for OAuth account: ${email}`);
+          logger.warn('Auth: Password reset requested for OAuth account', { email });
           // Don't reveal it's an OAuth account
         } else {
           // Invalidate old tokens
@@ -524,10 +606,10 @@ router.post('/forgot-password',
             `${user.first_name} ${user.last_name}`.trim()
           );
 
-          console.log(`✅ [AUTH] Password reset email sent to ${email}`);
+          logger.info('Auth: Password reset email sent', { email });
         }
       } else {
-        console.log(`⚠️  [AUTH] Password reset requested for non-existent or unverified email: ${email}`);
+        logger.warn('Auth: Password reset requested for non-existent or unverified email', { email });
       }
 
       // Always return success (prevent email enumeration)
@@ -537,7 +619,7 @@ router.post('/forgot-password',
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Forgot password error:', error);
+      logger.error('Auth: Forgot password error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -585,7 +667,7 @@ router.post('/reset-password',
       });
 
       if (!resetToken) {
-        console.log('⚠️  [AUTH] Invalid or expired reset token');
+        logger.warn('Auth: Invalid or expired reset token', { token: req.body.token });
         return res.status(400).json({
           error: 'Invalid Token',
           message: 'Password reset token is invalid or has expired. Please request a new password reset.'
@@ -603,7 +685,7 @@ router.post('/reset-password',
       // Mark token as used
       await resetToken.update({ used_at: new Date() });
 
-      console.log(`✅ [AUTH] Password reset successful for ${user.email}`);
+      logger.info('Auth: Password reset successful', { email: user.email, userId: user.id });
 
       res.json({
         success: true,
@@ -611,7 +693,7 @@ router.post('/reset-password',
       });
 
     } catch (error) {
-      console.error('❌ [AUTH] Reset password error:', error);
+      logger.error('Auth: Reset password error', { error: error.message, stack: error.stack });
       next(error);
     }
   }
@@ -619,12 +701,47 @@ router.post('/reset-password',
 
 /**
  * POST /api/auth/logout
- * Logout user
+ * Logout user and terminate session
  */
 router.post('/logout', async (req, res) => {
-  res.json({
-    message: 'Logout successful'
-  });
+  try {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const jwtTokenHash = require('crypto').createHash('sha256').update(token).digest('hex');
+
+      // Terminate session
+      await sessionTrackingService.initialize();
+
+      // Find and terminate session by JWT hash
+      const { initializeDatabase } = require('../services/database');
+      const sequelize = await initializeDatabase();
+
+      const [session] = await sequelize.query(`
+        SELECT id FROM active_sessions WHERE jwt_token_hash = :jwtTokenHash
+      `, {
+        replacements: { jwtTokenHash },
+        type: sequelize.QueryTypes.SELECT
+      });
+
+      if (session) {
+        await sessionTrackingService.terminateSession(session.id);
+        logger.info('Session terminated on logout', { sessionId: session.id });
+      }
+    }
+
+    res.json({
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    logger.error('Error during logout', { error: error.message });
+    // Still return success even if session termination fails
+    res.json({
+      message: 'Logout successful'
+    });
+  }
 });
 
 module.exports = router;

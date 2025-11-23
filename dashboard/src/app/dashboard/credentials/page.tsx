@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { credentialsAPI } from '@/lib/api';
+import { credentialsAPI, gcpCredentialsAPI, azureCredentialsAPI } from '@/lib/api';
 import {
   Key,
   Plus,
@@ -16,18 +16,27 @@ import {
 
 interface Credential {
   id: string;
-  type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github';
+  type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github' | 'gcp' | 'azure';
   metadata?: {
     name?: string;
     region?: string;
     account_id?: string;
   };
+  projectId?: string;
+  serviceAccountEmail?: string;
+  subscriptionId?: string;
+  tenantId?: string;
+  clientId?: string;
+  resourceGroup?: string;
+  zone?: string;
+  isDefault?: boolean;
   created_at: string;
   updated_at: string;
+  createdAt?: string;
 }
 
 type CredentialFormData = {
-  type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github';
+  type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github' | 'gcp' | 'azure';
   name: string;
   accessKeyId?: string;
   secretAccessKey?: string;
@@ -35,6 +44,15 @@ type CredentialFormData = {
   apiKey?: string;
   apiSecret?: string;
   region?: string;
+  projectId?: string;
+  serviceAccountKey?: string;
+  subscriptionId?: string;
+  tenantId?: string;
+  clientId?: string;
+  clientSecret?: string;
+  resourceGroup?: string;
+  zone?: string;
+  isDefault?: boolean;
 };
 
 export default function CredentialsPage() {
@@ -56,8 +74,55 @@ export default function CredentialsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await credentialsAPI.list();
-      setCredentials(response.data.credentials || []);
+
+      // Fetch credentials from all APIs
+      const [standardCreds, gcpCreds, azureCreds] = await Promise.all([
+        credentialsAPI.list().catch(() => ({ data: { credentials: [] } })),
+        gcpCredentialsAPI.list().catch(() => ({ data: { credentials: [] } })),
+        azureCredentialsAPI.list().catch(() => ({ data: { credentials: [] } }))
+      ]);
+
+      // Combine and normalize credentials
+      const allCredentials = [
+        ...(standardCreds.data.credentials || []).map((c: any) => ({
+          id: c.id,
+          type: c.type,
+          metadata: c.metadata,
+          created_at: c.createdAt || c.created_at,
+          updated_at: c.updatedAt || c.updated_at
+        })),
+        ...(gcpCreds.data.credentials || []).map((c: any) => ({
+          id: c.id,
+          type: 'gcp' as const,
+          projectId: c.projectId,
+          serviceAccountEmail: c.serviceAccountEmail,
+          metadata: {
+            name: c.projectId
+          },
+          region: c.region,
+          zone: c.zone,
+          isDefault: c.isDefault,
+          created_at: c.createdAt || c.created_at,
+          createdAt: c.createdAt || c.created_at
+        })),
+        ...(azureCreds.data.credentials || []).map((c: any) => ({
+          id: c.id,
+          type: 'azure' as const,
+          subscriptionId: c.subscriptionId,
+          tenantId: c.tenantId,
+          clientId: c.clientId,
+          resourceGroup: c.resourceGroup,
+          metadata: {
+            name: c.subscriptionId
+          },
+          region: c.region,
+          isDefault: c.isDefault,
+          created_at: c.createdAt || c.created_at,
+          createdAt: c.createdAt || c.created_at
+        }))
+      ];
+
+      setCredentials(allCredentials);
       setLoading(false);
     } catch (err: any) {
       console.error('Failed to fetch credentials:', err);
@@ -72,55 +137,94 @@ export default function CredentialsPage() {
     setError(null);
 
     try {
-      const credentialData: any = {};
+      // Handle GCP separately
+      if (formData.type === 'gcp') {
+        // Parse service account key JSON
+        let serviceAccountKey;
+        try {
+          serviceAccountKey = JSON.parse(formData.serviceAccountKey || '{}');
+        } catch (parseError) {
+          setError('Invalid service account key JSON. Please paste a valid JSON key.');
+          setSubmitting(false);
+          return;
+        }
 
-      // Build credential data based on type
-      switch (formData.type) {
-        case 'aws':
-          credentialData.accessKeyId = formData.accessKeyId;
-          credentialData.secretAccessKey = formData.secretAccessKey;
-          credentialData.region = formData.region;
-          break;
-        case 'digitalocean':
-          credentialData.token = formData.token;
-          break;
-        case 'cloudflare':
-        case 'godaddy':
-          credentialData.apiKey = formData.apiKey;
-          credentialData.apiSecret = formData.apiSecret;
-          break;
-        case 'github':
-          credentialData.token = formData.token;
-          break;
+        await gcpCredentialsAPI.create({
+          projectId: formData.projectId || '',
+          serviceAccountKey: serviceAccountKey,
+          region: formData.region || 'us-central1',
+          zone: formData.zone || 'us-central1-a',
+          isDefault: formData.isDefault || false
+        });
+      } else if (formData.type === 'azure') {
+        // Handle Azure separately
+        await azureCredentialsAPI.create({
+          subscriptionId: formData.subscriptionId || '',
+          tenantId: formData.tenantId || '',
+          clientId: formData.clientId || '',
+          clientSecret: formData.clientSecret || '',
+          resourceGroup: formData.resourceGroup,
+          region: formData.region || 'eastus',
+          isDefault: formData.isDefault || false
+        });
+      } else {
+        // Handle standard credentials
+        const credentialData: any = {};
+
+        switch (formData.type) {
+          case 'aws':
+            credentialData.accessKeyId = formData.accessKeyId;
+            credentialData.secretAccessKey = formData.secretAccessKey;
+            credentialData.region = formData.region;
+            break;
+          case 'digitalocean':
+            credentialData.apiToken = formData.token; // Backend expects 'apiToken'
+            break;
+          case 'cloudflare':
+          case 'godaddy':
+            credentialData.apiKey = formData.apiKey;
+            credentialData.apiSecret = formData.apiSecret;
+            break;
+          case 'github':
+            credentialData.token = formData.token;
+            break;
+        }
+
+        await credentialsAPI.create({
+          type: formData.type,
+          data: credentialData,
+          metadata: {
+            name: formData.name,
+            region: formData.region,
+          },
+        });
       }
-
-      await credentialsAPI.create({
-        type: formData.type,
-        data: credentialData,
-        metadata: {
-          name: formData.name,
-          region: formData.region,
-        },
-      });
 
       // Reset form and refresh list
       setFormData({ type: 'aws', name: '' });
       setShowAddForm(false);
       await fetchCredentials();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to add credential');
+      setError(err.response?.data?.message || err.response?.data?.error || 'Failed to add credential');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string, type: string) => {
     if (!confirm(`Are you sure you want to delete credential "${name}"?`)) {
       return;
     }
 
     try {
-      await credentialsAPI.delete(id);
+      // Use appropriate API based on type
+      if (type === 'gcp') {
+        await gcpCredentialsAPI.delete(id);
+      } else if (type === 'azure') {
+        await azureCredentialsAPI.delete(id);
+      } else {
+        await credentialsAPI.delete(id);
+      }
       setCredentials(credentials.filter((c) => c.id !== id));
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to delete credential');
@@ -135,6 +239,8 @@ export default function CredentialsPage() {
         return <Cloud className="h-6 w-6 text-blue-500" />;
       case 'cloudflare':
         return <Cloud className="h-6 w-6 text-orange-400" />;
+      case 'gcp':
+        return <Cloud className="h-6 w-6 text-blue-600" />;
       case 'github':
         return <Github className="h-6 w-6 text-gray-900" />;
       default:
@@ -150,6 +256,8 @@ export default function CredentialsPage() {
       godaddy: 'GoDaddy',
       route53: 'Route53',
       github: 'GitHub',
+      gcp: 'Google Cloud (GCP)',
+      azure: 'Microsoft Azure',
     };
     return labels[type] || type;
   };
@@ -232,25 +340,29 @@ export default function CredentialsPage() {
                 <option value="cloudflare">Cloudflare</option>
                 <option value="godaddy">GoDaddy</option>
                 <option value="github">GitHub</option>
+                <option value="gcp">Google Cloud (GCP)</option>
+                <option value="azure">Microsoft Azure</option>
               </select>
             </div>
 
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Credential Name
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                required
-                placeholder="e.g., Production AWS Account"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+            {/* Name (not shown for GCP or Azure) */}
+            {formData.type !== 'gcp' && formData.type !== 'azure' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Credential Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                  placeholder="e.g., Production AWS Account"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            )}
 
             {/* AWS Fields */}
             {formData.type === 'aws' && (
@@ -374,6 +486,208 @@ export default function CredentialsPage() {
               </div>
             )}
 
+            {/* GCP Fields */}
+            {formData.type === 'gcp' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Project ID
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.projectId || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, projectId: e.target.value })
+                    }
+                    required
+                    placeholder="my-project-id"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Service Account Key (JSON)
+                  </label>
+                  <textarea
+                    value={formData.serviceAccountKey || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, serviceAccountKey: e.target.value })
+                    }
+                    required
+                    placeholder='{"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'
+                    rows={8}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Paste the entire JSON key file from Google Cloud Console
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Default Region (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.region || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, region: e.target.value })
+                      }
+                      placeholder="us-central1"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Default Zone (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.zone || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, zone: e.target.value })
+                      }
+                      placeholder="us-central1-a"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="isDefault"
+                    checked={formData.isDefault || false}
+                    onChange={(e) =>
+                      setFormData({ ...formData, isDefault: e.target.checked })
+                    }
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="isDefault" className="ml-2 block text-sm text-gray-700">
+                    Set as default GCP credentials
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* Azure Fields */}
+            {formData.type === 'azure' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subscription ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.subscriptionId || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, subscriptionId: e.target.value })
+                    }
+                    required
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tenant ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.tenantId || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, tenantId: e.target.value })
+                    }
+                    required
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Client ID (Application ID) *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.clientId || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, clientId: e.target.value })
+                    }
+                    required
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Client Secret *
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.clientSecret || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, clientSecret: e.target.value })
+                    }
+                    required
+                    placeholder="Service Principal Client Secret"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Client secret from your Service Principal
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Resource Group (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.resourceGroup || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, resourceGroup: e.target.value })
+                    }
+                    placeholder="my-resource-group"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Default Region
+                  </label>
+                  <select
+                    value={formData.region || 'eastus'}
+                    onChange={(e) =>
+                      setFormData({ ...formData, region: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="eastus">East US</option>
+                    <option value="eastus2">East US 2</option>
+                    <option value="westus">West US</option>
+                    <option value="westus2">West US 2</option>
+                    <option value="centralus">Central US</option>
+                    <option value="westeurope">West Europe</option>
+                    <option value="northeurope">North Europe</option>
+                    <option value="southeastasia">Southeast Asia</option>
+                    <option value="eastasia">East Asia</option>
+                  </select>
+                </div>
+                <div className="flex items-start">
+                  <input
+                    type="checkbox"
+                    id="azureIsDefault"
+                    checked={formData.isDefault || false}
+                    onChange={(e) =>
+                      setFormData({ ...formData, isDefault: e.target.checked })
+                    }
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="azureIsDefault" className="ml-2 block text-sm text-gray-700">
+                    Set as default Azure credentials
+                  </label>
+                </div>
+              </>
+            )}
+
             {/* Form actions */}
             <div className="flex items-center justify-end space-x-3 pt-4">
               <button
@@ -444,7 +758,8 @@ export default function CredentialsPage() {
                       onClick={() =>
                         handleDelete(
                           credential.id,
-                          credential.metadata?.name || 'this credential'
+                          credential.metadata?.name || credential.projectId || 'this credential',
+                          credential.type
                         )
                       }
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

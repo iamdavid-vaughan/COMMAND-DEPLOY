@@ -7,6 +7,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const fs = require('fs').promises;
 const path = require('path');
+const logger = require('../utils/logger');
 
 /**
  * Middleware to check if user is super admin
@@ -51,7 +52,7 @@ router.get('/', authenticate, requireSuperAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [ADMIN] Error getting settings:', error);
+    logger.error('❌ [ADMIN] Error getting settings:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve settings',
@@ -83,7 +84,7 @@ router.put('/authorizenet', authenticate, requireSuperAdmin, async (req, res) =>
     }
 
     // Update .env file
-    const envPath = path.join(__dirname, '../../.env');
+    const envPath = path.join(__dirname, '../.env');
     let envContent = '';
 
     try {
@@ -121,7 +122,7 @@ router.put('/authorizenet', authenticate, requireSuperAdmin, async (req, res) =>
     process.env.AUTHNET_TRANSACTION_KEY = transactionKey;
     process.env.AUTHNET_ENVIRONMENT = environment;
 
-    console.log(`✅ [ADMIN] Authorize.Net credentials updated to ${environment} mode`);
+    logger.info(`[ADMIN] Authorize.Net credentials updated to ${environment} mode`);
 
     res.json({
       success: true,
@@ -130,7 +131,7 @@ router.put('/authorizenet', authenticate, requireSuperAdmin, async (req, res) =>
     });
 
   } catch (error) {
-    console.error('❌ [ADMIN] Error updating Authorize.Net settings:', error);
+    logger.error('❌ [ADMIN] Error updating Authorize.Net settings:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update settings',
@@ -155,7 +156,7 @@ router.put('/postmark', authenticate, requireSuperAdmin, async (req, res) => {
     }
 
     // Update .env file
-    const envPath = path.join(__dirname, '../../.env');
+    const envPath = path.join(__dirname, '../.env');
     let envContent = '';
 
     try {
@@ -194,7 +195,7 @@ router.put('/postmark', authenticate, requireSuperAdmin, async (req, res) => {
       process.env.POSTMARK_FROM_EMAIL = fromEmail;
     }
 
-    console.log(`✅ [ADMIN] Postmark credentials updated`);
+    logger.info('Admin: Postmark credentials updated');
 
     res.json({
       success: true,
@@ -202,7 +203,7 @@ router.put('/postmark', authenticate, requireSuperAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [ADMIN] Error updating Postmark settings:', error);
+    logger.error('❌ [ADMIN] Error updating Postmark settings:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update settings',

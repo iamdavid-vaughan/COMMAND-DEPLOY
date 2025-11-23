@@ -18,9 +18,20 @@
 
 const jwt = require('jsonwebtoken');
 const { hasFeature, isWithinLimits } = require('../../lib/saas/license-tiers');
+const sessionTrackingService = require('../services/sessionTracking');
+const logger = require('../utils/logger');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// JWT Configuration - REQUIRED environment variables
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+// Validate JWT_SECRET is set (critical security requirement)
+if (!JWT_SECRET) {
+  throw new Error(
+    'CRITICAL: JWT_SECRET environment variable is required. ' +
+    'Generate a secure secret with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"'
+  );
+}
 
 /**
  * Generate JWT token
@@ -68,7 +79,7 @@ function verifyToken(token) {
 
 /**
  * Authentication Middleware
- * Verifies JWT token and attaches user to request
+ * Verifies JWT token and validates active session
  */
 async function authenticate(req, res, next) {
   try {
@@ -84,8 +95,26 @@ async function authenticate(req, res, next) {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verify token
+    // Verify JWT token
     const decoded = verifyToken(token);
+
+    // Validate session (backward compatible - create if missing)
+    await sessionTrackingService.initialize();
+    const sessionValidation = await sessionTrackingService.validateSession(token);
+
+    if (!sessionValidation.valid) {
+      // Token is valid but no session exists - create one for backward compatibility
+      try {
+        await sessionTrackingService.createSession(decoded.userId, token, req);
+        logger.info('Created session for existing token', { userId: decoded.userId });
+      } catch (sessionError) {
+        logger.error('Failed to create session for existing token', {
+          error: sessionError.message,
+          userId: decoded.userId
+        });
+        // Continue anyway - don't break existing users
+      }
+    }
 
     // Attach user info to request
     req.user = {
@@ -95,10 +124,6 @@ async function authenticate(req, res, next) {
       role: decoded.role,
       superAdminFor: decoded.superAdminFor
     };
-
-    // TODO: Optionally fetch full user from database
-    // const user = await getUserById(decoded.userId);
-    // req.user = user;
 
     next();
   } catch (error) {

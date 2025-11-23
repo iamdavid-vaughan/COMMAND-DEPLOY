@@ -75,15 +75,35 @@ export default function UsagePage() {
         usageAPI.history(6), // Last 6 months
       ]);
 
+      const usage = currentUsage.data.usage || {};
+      const backendLimits = limitsData.data.limits;
+
+      // Transform backend limits structure to match frontend expectations
+      const transformedLimits: UsageLimits = {
+        deploymentsPerMonth: backendLimits.deployments?.perMonth ?? 0,
+        concurrentDeployments: backendLimits.deployments?.concurrent ?? 0,
+        maxInstances: backendLimits.instances?.max ?? 0,
+        storageGB: backendLimits.storage?.maxGB ?? 0,
+        apiAccess: backendLimits.apiAccess ?? false,
+      };
+
       setUsageStats({
-        deploymentsThisMonth: currentUsage.data.deploymentsThisMonth || 0,
-        currentlyActive: currentUsage.data.activeDeployments || 0,
-        totalInstances: currentUsage.data.totalInstances || 0,
-        storageUsed: currentUsage.data.storageUsedGB || 0,
-        limits: limitsData.data.limits,
+        deploymentsThisMonth: usage.deployments?.total || 0,
+        currentlyActive: usage.deployments?.active || 0,
+        totalInstances: usage.ec2Instances?.created || 0,
+        storageUsed: usage.s3Buckets?.created || 0,
+        limits: transformedLimits,
       });
 
-      setHistoricalData(historyData.data.history || []);
+      // Transform historical data to match chart expectations
+      const transformedHistory = (historyData.data.history || []).map((item: any) => ({
+        month: item.period || item.month,
+        deployments: item.deployments || 0,
+        apiCalls: item.apiCalls || 0,
+        storageGB: item.storageGB || 0,
+      }));
+
+      setHistoricalData(transformedHistory);
 
       setLoading(false);
     } catch (err: any) {
@@ -204,7 +224,7 @@ export default function UsagePage() {
       </div>
 
       {/* Current Plan */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow p-6 text-white">
+      <div className="bg-blue-600 rounded-lg shadow p-6 text-white">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-blue-100 text-sm font-medium">Current Plan</p>

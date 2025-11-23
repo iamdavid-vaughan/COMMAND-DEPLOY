@@ -246,7 +246,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <a
             href="/dashboard/admin/security"
-            className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-sm p-6 text-white hover:from-blue-700 hover:to-blue-800 transition-all transform hover:scale-105"
+            className="bg-blue-600 rounded-lg shadow-sm p-6 text-white hover:bg-opacity-90 transition-all transform hover:scale-105"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white bg-opacity-20 p-2 rounded-lg">
@@ -260,7 +260,7 @@ export default function AdminPage() {
           </a>
           <a
             href="/dashboard/admin/settings"
-            className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg shadow-sm p-6 text-white hover:from-purple-700 hover:to-purple-800 transition-all transform hover:scale-105"
+            className="bg-purple-600 rounded-lg shadow-sm p-6 text-white hover:bg-opacity-90 transition-all transform hover:scale-105"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white bg-opacity-20 p-2 rounded-lg">
@@ -274,7 +274,7 @@ export default function AdminPage() {
           </a>
           <a
             href="/dashboard/admin/pricing"
-            className="bg-gradient-to-r from-green-600 to-green-700 rounded-lg shadow-sm p-6 text-white hover:from-green-700 hover:to-green-800 transition-all transform hover:scale-105"
+            className="bg-green-600 rounded-lg shadow-sm p-6 text-white hover:bg-opacity-90 transition-all transform hover:scale-105"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white bg-opacity-20 p-2 rounded-lg">
@@ -288,7 +288,7 @@ export default function AdminPage() {
           </a>
           <a
             href="/dashboard/admin/usage"
-            className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-lg shadow-sm p-6 text-white hover:from-orange-700 hover:to-orange-800 transition-all transform hover:scale-105"
+            className="bg-orange-600 rounded-lg shadow-sm p-6 text-white hover:bg-opacity-90 transition-all transform hover:scale-105"
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white bg-opacity-20 p-2 rounded-lg">

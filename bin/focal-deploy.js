@@ -48,6 +48,7 @@ const { activateLicense, deactivateLicense, licenseInfo } = require('../lib/comm
 const { LicenseManager } = require('../lib/utils/license-manager');
 const AuditCommands = require('../lib/commands/audit');
 const PasswordCheckCommands = require('../lib/commands/password-check');
+const { listTemplates, templateInfo } = require('../lib/commands/templates');
 
 const program = new Command();
 
@@ -79,6 +80,7 @@ program
   .option('--force', 'Overwrite existing directories')
   .option('--quiet', 'Minimal output for automation')
   .option('--resume', 'Resume from last failed deployment phase')
+  .option('--template <slug>', 'Use a deployment template (e.g., wordpress-lamp, nodejs-pm2)')
   .option('--no-git', 'Skip Git initialization')
   .option('--github-repo <name>', 'Custom GitHub repository name')
   .option('--private', 'Create private GitHub repository (default)')
@@ -904,134 +906,31 @@ program
     }
   });
 
-// Audit log commands
+// Templates command - list available templates
 program
-  .command('audit-logs')
-  .description('📋 View security audit logs with filtering options')
-  .option('--action <action>', 'Filter by action type')
-  .option('--category <category>', 'Filter by category (authentication, deployment, security, etc.)')
-  .option('--severity <severity>', 'Filter by severity (info, warning, critical)')
-  .option('--user <user>', 'Filter by user')
-  .option('--failed', 'Show only failed actions')
-  .option('--since <date>', 'Show logs since date (e.g., "7d", "24h", "2024-01-01")')
-  .option('--until <date>', 'Show logs until date')
-  .option('--limit <number>', 'Limit number of results', '50')
-  .option('--format <format>', 'Output format (table, json, csv)', 'table')
+  .command('templates list')
+  .description('List all available deployment templates')
+  .option('--provider <provider>', 'Filter by cloud provider (aws, gcp, azure, all)', 'all')
+  .option('--category <category>', 'Filter by category (application, infrastructure)')
+  .option('--framework <framework>', 'Filter by framework')
+  .option('--search <query>', 'Search templates by name or description')
+  .option('--limit <number>', 'Number of templates to show', '50')
   .action(async (options) => {
     try {
-      const auditCommands = new AuditCommands();
-      await auditCommands.viewLogs(options);
+      await listTemplates(options);
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);
     }
   });
 
+// Templates command - show template details
 program
-  .command('audit-stats')
-  .description('📊 Display audit log statistics and analytics')
-  .action(async () => {
+  .command('templates info <slug>')
+  .description('Show detailed information about a specific template')
+  .action(async (slug, options) => {
     try {
-      const auditCommands = new AuditCommands();
-      await auditCommands.showStatistics();
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('audit-interactive')
-  .description('🔍 Interactive audit log viewer with multiple filtering options')
-  .action(async () => {
-    try {
-      const auditCommands = new AuditCommands();
-      await auditCommands.interactiveView();
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('audit-export')
-  .description('💾 Export audit logs to file')
-  .action(async () => {
-    try {
-      const auditCommands = new AuditCommands();
-      await auditCommands.exportLogs();
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('audit-clear')
-  .description('🗑️  Clear all audit logs (creates backup first)')
-  .action(async () => {
-    try {
-      const auditCommands = new AuditCommands();
-      await auditCommands.clearLogs();
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-// Password breach checking commands
-program
-  .command('password-check')
-  .description('🔐 Check if password has been compromised in data breaches')
-  .argument('[password]', 'Password to check (will prompt if not provided)')
-  .action(async (password) => {
-    try {
-      const passwordCheckCommands = new PasswordCheckCommands();
-      if (password) {
-        await passwordCheckCommands.checkPasswordDirect(password);
-      } else {
-        await passwordCheckCommands.checkPassword();
-      }
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('password-generate')
-  .description('🔑 Generate a secure random password')
-  .action(async () => {
-    try {
-      const passwordCheckCommands = new PasswordCheckCommands();
-      await passwordCheckCommands.generatePassword();
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('password-batch-check')
-  .description('📋 Check multiple passwords from a file')
-  .argument('<file>', 'Path to file containing passwords (one per line)')
-  .action(async (file) => {
-    try {
-      const passwordCheckCommands = new PasswordCheckCommands();
-      await passwordCheckCommands.batchCheck(file);
-    } catch (error) {
-      ErrorHandler.handle(error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('password-security')
-  .description('🛡️  Interactive password security tool')
-  .action(async () => {
-    try {
-      const passwordCheckCommands = new PasswordCheckCommands();
-      await passwordCheckCommands.interactiveMenu();
+      await templateInfo(slug, options);
     } catch (error) {
       ErrorHandler.handle(error);
       process.exit(1);

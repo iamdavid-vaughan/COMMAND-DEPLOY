@@ -6,6 +6,8 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { getModels } = require('../models');
 const { authenticate } = require('../middleware/auth');
+const ssmService = require('../services/ssmService');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -44,7 +46,7 @@ async function authenticateAgent(req, res, next) {
     next();
 
   } catch (error) {
-    console.error('❌ [Monitoring Auth] Error:', error);
+    logger.error('❌ [Monitoring Auth] Error:', error);
     res.status(500).json({
       error: 'Authentication error'
     });
@@ -128,11 +130,154 @@ router.post('/report',
       });
 
     } catch (error) {
-      console.error('❌ [Monitoring] Error recording metrics:', error);
+      logger.error('❌ [Monitoring] Error recording metrics:', error);
       next(error);
     }
   }
 );
+
+/**
+ * GET /api/monitoring/deployments - Get health status for all user deployments
+ */
+router.get('/deployments',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const { Deployment, ServerMetric } = getModels();
+      const { Op } = require('sequelize');
+
+      // Get all user's deployments
+      const deployments = await Deployment.findAll({
+        where: {
+          user_id: req.user.userId,
+          status: {
+            [Op.in]: ['running', 'deployed', 'active', 'completed']
+          }
+        },
+        order: [['created_at', 'DESC']]
+      });
+
+      // For each deployment, get latest metrics
+      const deploymentsWithHealth = await Promise.all(
+        deployments.map(async (deployment) => {
+          // Get latest metric
+          const latestMetric = await ServerMetric.findOne({
+            where: { deployment_id: deployment.id },
+            order: [['recorded_at', 'DESC']]
+          });
+
+          // Determine health status
+          let status = 'unknown';
+          let metrics = {
+            cpu: 0,
+            memory: 0,
+            disk: 0,
+            responseTime: 0
+          };
+          let lastCheck = new Date();
+          let uptime = 0;
+
+          if (latestMetric) {
+            lastCheck = latestMetric.recorded_at;
+            metrics = {
+              cpu: parseFloat(latestMetric.cpu_percent) || 0,
+              memory: parseFloat(latestMetric.ram_percent) || 0,
+              disk: parseFloat(latestMetric.disk_percent) || 0,
+              responseTime: 150 // Mock - would come from actual health checks
+            };
+
+            // Calculate uptime from app_uptime string (e.g., "3d 5h 42m")
+            if (latestMetric.app_uptime) {
+              uptime = parseUptimeToSeconds(latestMetric.app_uptime);
+            }
+
+            // Determine status based on metrics and app_status
+            if (latestMetric.app_status === 'online') {
+              if (metrics.cpu >= 90 || metrics.memory >= 95 || metrics.disk >= 95) {
+                status = 'degraded';
+              } else {
+                status = 'healthy';
+              }
+            } else if (latestMetric.app_status === 'error' || latestMetric.app_status === 'offline') {
+              status = 'down';
+            } else {
+              status = 'unknown';
+            }
+
+            // Check if metrics are stale (> 10 minutes old)
+            const minutesSinceLastCheck = (Date.now() - lastCheck.getTime()) / 1000 / 60;
+            if (minutesSinceLastCheck > 10) {
+              status = 'unknown';
+            }
+          }
+
+          // Get SSL certificate status
+          const { checkSSLCertificate } = require('../services/sslChecker');
+          let ssl = {
+            valid: false,
+            expiresAt: new Date(),
+            daysUntilExpiry: 0
+          };
+
+          if (deployment.domain) {
+            try {
+              const sslCheck = await checkSSLCertificate(deployment.domain);
+              ssl = {
+                valid: sslCheck.valid,
+                expiresAt: sslCheck.expiresAt || new Date(),
+                daysUntilExpiry: sslCheck.daysUntilExpiry || 0
+              };
+            } catch (error) {
+              logger.warn('SSL check failed', { domain: deployment.domain, error: error.message });
+            }
+          }
+
+          return {
+            id: deployment.id,
+            name: deployment.project_name || deployment.name || `Deployment ${deployment.id}`,
+            status,
+            lastCheck,
+            uptime,
+            metrics,
+            ssl,
+            url: deployment.domain ? `https://${deployment.domain}` : null
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        deployments: deploymentsWithHealth
+      });
+
+    } catch (error) {
+      logger.error('❌ [Monitoring] Error fetching deployment health:', error);
+      next(error);
+    }
+  }
+);
+
+/**
+ * Helper: Parse uptime string to seconds
+ */
+function parseUptimeToSeconds(uptimeStr) {
+  try {
+    let seconds = 0;
+    const dayMatch = uptimeStr.match(/(\d+)d/);
+    const hourMatch = uptimeStr.match(/(\d+)h/);
+    const minMatch = uptimeStr.match(/(\d+)m/);
+    const secMatch = uptimeStr.match(/(\d+)s/);
+
+    if (dayMatch) seconds += parseInt(dayMatch[1]) * 86400;
+    if (hourMatch) seconds += parseInt(hourMatch[1]) * 3600;
+    if (minMatch) seconds += parseInt(minMatch[1]) * 60;
+    if (secMatch) seconds += parseInt(secMatch[1]);
+
+    return seconds;
+  } catch (error) {
+    return 0;
+  }
+}
 
 /**
  * GET /api/deployments/:id/metrics - Get metrics for a deployment
@@ -218,7 +363,7 @@ router.get('/:deploymentId/metrics',
       });
 
     } catch (error) {
-      console.error('❌ [Monitoring] Error fetching metrics:', error);
+      logger.error('❌ [Monitoring] Error fetching metrics:', error);
       next(error);
     }
   }
@@ -345,7 +490,7 @@ router.get('/:deploymentId/metrics/summary',
       });
 
     } catch (error) {
-      console.error('❌ [Monitoring] Error calculating summary:', error);
+      logger.error('❌ [Monitoring] Error calculating summary:', error);
       next(error);
     }
   }
@@ -356,7 +501,8 @@ router.get('/:deploymentId/metrics/summary',
  */
 async function checkAlerts(deployment, metric) {
   try {
-    const { AlertRule, AlertHistory } = getModels();
+    const { AlertRule, AlertHistory, User } = getModels();
+    const { sendAlertEmail } = require('../services/email');
 
     // Get active alert rules for this deployment
     const rules = await AlertRule.findAll({
@@ -365,6 +511,13 @@ async function checkAlerts(deployment, metric) {
         enabled: true
       }
     });
+
+    // Get deployment owner for email notifications
+    const owner = await User.findByPk(deployment.user_id);
+    if (!owner) {
+      logger.warn('[Alert] Cannot send alert - deployment owner not found', { deploymentId: deployment.id });
+      return;
+    }
 
     for (const rule of rules) {
       let triggered = false;
@@ -391,29 +544,68 @@ async function checkAlerts(deployment, metric) {
       }
 
       if (triggered) {
+        const severity = getSeverity(rule.rule_type, triggeredValue);
+        const message = `${rule.rule_name}: ${rule.rule_type} ${rule.comparison || 'equals'} ${rule.threshold || 'online'}`;
+
+        // Check if we've already alerted recently (within last hour) to avoid spam
+        const recentAlert = await AlertHistory.findOne({
+          where: {
+            alert_rule_id: rule.id,
+            deployment_id: deployment.id,
+            created_at: {
+              [require('sequelize').Op.gte]: new Date(Date.now() - 60 * 60 * 1000) // Last hour
+            }
+          },
+          order: [['created_at', 'DESC']]
+        });
+
         // Create alert history
         await AlertHistory.create({
           alert_rule_id: rule.id,
           deployment_id: deployment.id,
           triggered_value: triggeredValue,
-          message: `${rule.rule_name}: ${rule.rule_type} ${rule.comparison} ${rule.threshold}`,
-          severity: getSeverity(rule.rule_type, triggeredValue)
+          message,
+          severity
         });
 
         // Update rule's last triggered
         await rule.update({
           last_triggered_at: new Date(),
-          triggered_count: rule.triggered_count + 1
+          triggered_count: (rule.triggered_count || 0) + 1
         });
 
-        console.log(`🚨 [Alert] ${rule.rule_name} triggered for deployment ${deployment.id}`);
+        logger.info(`[Alert] ${rule.rule_name} triggered for deployment ${deployment.id}`, {
+          severity,
+          value: triggeredValue
+        });
 
-        // TODO: Send email/webhook notification
+        // Send email notification (only if not alerted recently)
+        if (!recentAlert) {
+          try {
+            await sendAlertEmail({
+              to: owner.email,
+              deploymentName: deployment.project_name || deployment.name || `Deployment ${deployment.id}`,
+              alertName: rule.rule_name,
+              message,
+              severity,
+              triggeredValue: String(triggeredValue)
+            });
+            logger.info('[Alert] Email notification sent', { email: owner.email, alert: rule.rule_name });
+          } catch (emailError) {
+            logger.error('[Alert] Failed to send email notification', {
+              error: emailError.message,
+              email: owner.email,
+              alert: rule.rule_name
+            });
+          }
+        } else {
+          logger.info('[Alert] Skipping email notification - already alerted within last hour');
+        }
       }
     }
 
   } catch (error) {
-    console.error('❌ [Alert Check] Error:', error);
+    logger.error('❌ [Alert Check] Error:', error);
     // Don't throw - we don't want alert checking to break metric submission
   }
 }
@@ -445,5 +637,210 @@ function getSeverity(ruleType, value) {
   }
   return 'warning';
 }
+
+/**
+ * POST /api/monitoring/:deploymentId/collect-ssm - Collect metrics via SSM (AWS only)
+ * This endpoint triggers SSM-based metric collection for AWS deployments
+ */
+router.post('/:deploymentId/collect-ssm',
+  authenticate,
+  [
+    param('deploymentId').isUUID()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { Deployment, EncryptedCredential, ServerMetric } = getModels();
+      const { deploymentId } = req.params;
+
+      // Verify user owns this deployment
+      const deployment = await Deployment.findOne({
+        where: {
+          id: deploymentId,
+          user_id: req.user.userId
+        }
+      });
+
+      if (!deployment) {
+        return res.status(404).json({
+          success: false,
+          error: 'Deployment not found'
+        });
+      }
+
+      // Check if deployment is AWS
+      if (deployment.provider !== 'aws') {
+        return res.status(400).json({
+          success: false,
+          error: 'SSM metrics collection is only available for AWS deployments'
+        });
+      }
+
+      // Get AWS credentials
+      const credentials = await EncryptedCredential.findByPk(deployment.credential_id);
+      if (!credentials) {
+        return res.status(404).json({
+          success: false,
+          error: 'AWS credentials not found'
+        });
+      }
+
+      // Decrypt credentials
+      const { decryptCredentials } = require('../services/encryption');
+      const awsCredentials = await decryptCredentials(credentials, req.user.userId);
+
+      // Check if SSM is available on this instance
+      const ssmAvailable = await ssmService.isSSMAvailable(
+        deployment.instance_id,
+        awsCredentials,
+        deployment.region
+      );
+
+      if (!ssmAvailable) {
+        return res.status(503).json({
+          success: false,
+          error: 'SSM agent is not available on this instance. Please ensure the instance has the SSM agent installed and the IAM role attached.',
+          ssmAvailable: false
+        });
+      }
+
+      // Collect metrics via SSM
+      logger.info('Monitoring: Collecting metrics via SSM', {
+        deploymentId,
+        instanceId: deployment.instance_id
+      });
+
+      const metrics = await ssmService.getServerMetrics(
+        deployment.instance_id,
+        awsCredentials,
+        deployment.region
+      );
+
+      // Store metrics in database
+      const metricRecord = await ServerMetric.create({
+        deployment_id: deploymentId,
+        cpu_percent: metrics.cpu,
+        ram_percent: metrics.memory,
+        disk_percent: metrics.disk,
+        app_status: 'unknown', // SSM metrics don't include app status
+        recorded_at: metrics.timestamp
+      });
+
+      logger.info('Monitoring: SSM metrics stored', {
+        deploymentId,
+        metricId: metricRecord.id
+      });
+
+      res.json({
+        success: true,
+        message: 'Metrics collected via SSM',
+        metrics: {
+          cpu: metrics.cpu,
+          memory: metrics.memory,
+          disk: metrics.disk,
+          timestamp: metrics.timestamp
+        },
+        metricId: metricRecord.id,
+        ssmAvailable: true
+      });
+
+    } catch (error) {
+      logger.error('Monitoring: SSM metrics collection failed', {
+        deploymentId: req.params.deploymentId,
+        error: error.message,
+        stack: error.stack
+      });
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to collect metrics via SSM',
+        message: error.message
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/monitoring/:deploymentId/check-health-ssm - Check app health via SSM
+ */
+router.post('/:deploymentId/check-health-ssm',
+  authenticate,
+  [
+    param('deploymentId').isUUID()
+  ],
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { Deployment, EncryptedCredential } = getModels();
+      const { deploymentId } = req.params;
+
+      const deployment = await Deployment.findOne({
+        where: {
+          id: deploymentId,
+          user_id: req.user.userId
+        }
+      });
+
+      if (!deployment) {
+        return res.status(404).json({
+          success: false,
+          error: 'Deployment not found'
+        });
+      }
+
+      if (deployment.provider !== 'aws') {
+        return res.status(400).json({
+          success: false,
+          error: 'SSM health check is only available for AWS deployments'
+        });
+      }
+
+      const credentials = await EncryptedCredential.findByPk(deployment.credential_id);
+      if (!credentials) {
+        return res.status(404).json({
+          success: false,
+          error: 'AWS credentials not found'
+        });
+      }
+
+      const { decryptCredentials } = require('../services/encryption');
+      const awsCredentials = await decryptCredentials(credentials, req.user.userId);
+
+      const appPort = deployment.configuration?.application?.port || 3000;
+
+      const healthCheck = await ssmService.checkApplicationHealth(
+        deployment.instance_id,
+        appPort,
+        awsCredentials,
+        deployment.region
+      );
+
+      res.json({
+        success: true,
+        health: healthCheck
+      });
+
+    } catch (error) {
+      logger.error('Monitoring: SSM health check failed', {
+        deploymentId: req.params.deploymentId,
+        error: error.message
+      });
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to check application health via SSM',
+        message: error.message
+      });
+    }
+  }
+);
 
 module.exports = router;

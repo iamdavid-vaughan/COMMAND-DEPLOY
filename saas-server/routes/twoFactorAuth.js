@@ -15,6 +15,7 @@ const {
   generateBackupCodes,
   hashBackupCode,
 } = require('../services/twoFactorAuth');
+const sessionTrackingService = require('../services/sessionTracking');
 
 const router = express.Router();
 
@@ -324,6 +325,10 @@ router.post(
           superAdminFor: user.super_admin_for || [],
         });
 
+        // Create session
+        await sessionTrackingService.initialize();
+        await sessionTrackingService.createSession(user.id, fullToken, req);
+
         return res.json({
           success: true,
           message: 'Login successful',
@@ -334,6 +339,7 @@ router.post(
             licenseTier: user.license_tier,
             role: user.role || 'user',
             superAdminFor: user.super_admin_for || [],
+            avatarUrl: user.avatar_url || null
           },
           token: fullToken,
           expiresIn: '7d',
@@ -375,6 +381,10 @@ router.post(
             superAdminFor: user.super_admin_for || [],
           });
 
+          // Create session
+          await sessionTrackingService.initialize();
+          await sessionTrackingService.createSession(user.id, fullToken, req);
+
           return res.json({
             success: true,
             message: 'Login successful (backup code used)',
@@ -385,6 +395,7 @@ router.post(
               licenseTier: user.license_tier,
               role: user.role || 'user',
               superAdminFor: user.super_admin_for || [],
+              avatarUrl: user.avatar_url || null
             },
             token: fullToken,
             expiresIn: '7d',
@@ -430,7 +441,7 @@ router.get('/status', authenticate, async (req, res, next) => {
         const codes = JSON.parse(decryptedCodes);
         backupCodesRemaining = codes.length;
       } catch (error) {
-        console.error('Error checking backup codes:', error);
+        logger.info('Error checking backup codes:', error);
       }
     }
 

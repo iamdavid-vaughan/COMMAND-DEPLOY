@@ -12,6 +12,7 @@ interface User {
   licenseTier: string;
   role?: string;
   superAdminFor?: string[];
+  avatarUrl?: string;
 }
 
 interface LoginResponse {

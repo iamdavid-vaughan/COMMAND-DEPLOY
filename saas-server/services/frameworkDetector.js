@@ -5,6 +5,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const logger = require('../utils/logger');
 
 class FrameworkDetector {
   /**
@@ -14,7 +15,7 @@ class FrameworkDetector {
    */
   async detectFromDirectory(projectPath) {
     try {
-      console.log(`🔍 [Framework Detector] Scanning: ${projectPath}`);
+      logger.info('FrameworkDetector: Scanning project', { projectPath });
 
       // Check for package.json (Node.js ecosystem)
       const hasPackageJson = await this.fileExists(path.join(projectPath, 'package.json'));
@@ -58,11 +59,11 @@ class FrameworkDetector {
       }
 
       // Default: Unknown
-      console.log('⚠️  [Framework Detector] Could not detect framework');
+      logger.warn('FrameworkDetector: Could not detect framework', { projectPath });
       return this.getUnknownConfig();
 
     } catch (error) {
-      console.error('❌ [Framework Detector] Error:', error.message);
+      logger.error('FrameworkDetector: Error detecting framework', { projectPath, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -82,58 +83,58 @@ class FrameworkDetector {
 
       // Next.js
       if (deps.next || await this.fileExists(path.join(projectPath, 'next.config.js'))) {
-        console.log('✅ [Framework Detector] Detected: Next.js');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Next.js' });
         return this.getNextJSConfig(packageJson);
       }
 
       // Nuxt.js
       if (deps.nuxt || await this.fileExists(path.join(projectPath, 'nuxt.config.js'))) {
-        console.log('✅ [Framework Detector] Detected: Nuxt.js');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Nuxt.js' });
         return this.getNuxtConfig(packageJson);
       }
 
       // Gatsby
       if (deps.gatsby) {
-        console.log('✅ [Framework Detector] Detected: Gatsby');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Gatsby' });
         return this.getGatsbyConfig(packageJson);
       }
 
       // React (Create React App)
       if (deps['react-scripts']) {
-        console.log('✅ [Framework Detector] Detected: React (CRA)');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'React (CRA)' });
         return this.getReactCRAConfig(packageJson);
       }
 
       // Vue.js
       if (deps.vue && deps['@vue/cli-service']) {
-        console.log('✅ [Framework Detector] Detected: Vue.js CLI');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Vue.js CLI' });
         return this.getVueConfig(packageJson);
       }
 
       // Angular
       if (deps['@angular/core']) {
-        console.log('✅ [Framework Detector] Detected: Angular');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Angular' });
         return this.getAngularConfig(packageJson);
       }
 
       // Express.js
       if (deps.express) {
-        console.log('✅ [Framework Detector] Detected: Express.js');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'Express.js' });
         return this.getExpressConfig(packageJson);
       }
 
       // Nest.js
       if (deps['@nestjs/core']) {
-        console.log('✅ [Framework Detector] Detected: NestJS');
+        logger.info('FrameworkDetector: Framework detected', { framework: 'NestJS' });
         return this.getNestJSConfig(packageJson);
       }
 
       // Generic Node.js
-      console.log('✅ [Framework Detector] Detected: Node.js (generic)');
+      logger.info('FrameworkDetector: Framework detected', { framework: 'Node.js (generic)' });
       return this.getNodeJSConfig(packageJson);
 
     } catch (error) {
-      console.error('❌ [Framework Detector] Error reading package.json:', error.message);
+      logger.error('FrameworkDetector: Error reading package.json', { error: error.message, stack: error.stack });
       return null;
     }
   }

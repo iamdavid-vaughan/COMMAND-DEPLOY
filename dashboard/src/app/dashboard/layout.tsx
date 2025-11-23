@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
+import ThemeToggle from '@/components/ThemeToggle';
 import {
   LayoutDashboard,
   Rocket,
@@ -17,6 +18,12 @@ import {
   X,
   Shield,
   AlertCircle,
+  Terminal,
+  Monitor,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Activity,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -28,6 +35,7 @@ export default function DashboardLayout({
   const { user, isInitialized, logout, initAuth } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showBetaModal, setShowBetaModal] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     initAuth();
@@ -62,26 +70,44 @@ export default function DashboardLayout({
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Deployments', href: '/dashboard/deployments', icon: Rocket },
+    { name: 'Monitoring', href: '/dashboard/monitoring', icon: Activity },
+    { name: 'Alerts', href: '/dashboard/alerts', icon: AlertCircle },
+    { name: 'SSL Certificates', href: '/dashboard/ssl', icon: Shield },
     { name: 'Credentials', href: '/dashboard/credentials', icon: Key },
     { name: 'Password Security', href: '/dashboard/security', icon: Shield },
+    { name: 'Active Sessions', href: '/dashboard/sessions', icon: Monitor },
+    { name: 'Team', href: '/dashboard/team', icon: Users },
     { name: 'Usage', href: '/dashboard/usage', icon: BarChart3 },
-    { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
     { name: 'API Keys', href: '/dashboard/api-keys', icon: Key },
     { name: 'API Docs', href: '/dashboard/api-docs', icon: FileText },
+  ];
+
+  const userMenuItems = [
+    { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 
   // Add Admin links if user is super admin
   if (user.role === 'super_admin') {
-    navigation.splice(7, 0, {
+    navigation.push({
       name: 'Admin Panel',
       href: '/dashboard/admin',
       icon: Shield,
     });
+    navigation.push({
+      name: 'System Alerts',
+      href: '/dashboard/admin/system-alerts',
+      icon: AlertCircle,
+    });
+    navigation.push({
+      name: 'System Logs',
+      href: '/dashboard/admin/logs',
+      icon: Terminal,
+    });
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -92,15 +118,15 @@ export default function DashboardLayout({
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
+        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <Rocket className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">Focal Deploy</span>
+            <Rocket className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <span className="text-xl font-bold text-gray-900 dark:text-white">Focal Deploy</span>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -110,19 +136,7 @@ export default function DashboardLayout({
           </button>
         </div>
 
-        {/* User info */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <p className="text-sm font-medium text-gray-900">{user.name}</p>
-          <p className="text-xs text-gray-500">{user.email}</p>
-          <div className="mt-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {user.licenseTier.toUpperCase()}
-              {user.role === 'super_admin' && ' • ADMIN'}
-            </span>
-          </div>
-        </div>
-
-        {/* Navigation */}
+        {/* Navigation - Scrollable */}
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon;
@@ -130,7 +144,7 @@ export default function DashboardLayout({
               <Link
                 key={item.name}
                 href={item.href}
-                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
               >
                 <Icon className="h-5 w-5 mr-3" />
                 {item.name}
@@ -140,7 +154,7 @@ export default function DashboardLayout({
         </nav>
 
         {/* Beta Notice Badge */}
-        <div className="px-4 py-2">
+        <div className="px-4 py-2 flex-shrink-0">
           <button
             onClick={() => setShowBetaModal(true)}
             className="flex items-center w-full px-3 py-2 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors group"
@@ -154,15 +168,75 @@ export default function DashboardLayout({
           </button>
         </div>
 
-        {/* Logout button */}
-        <div className="p-4 border-t border-gray-200">
-          <button
-            onClick={handleLogout}
-            className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-          >
-            <LogOut className="h-5 w-5 mr-3" />
-            Logout
-          </button>
+        {/* User Menu - Fixed at bottom */}
+        <div className="border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          {/* User Menu Dropdown */}
+          <div className="relative">
+            {userMenuOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 mx-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                {userMenuItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors first:rounded-t-lg"
+                    >
+                      <Icon className="h-5 w-5 mr-3" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors rounded-b-lg border-t border-gray-200"
+                >
+                  <LogOut className="h-5 w-5 mr-3" />
+                  Logout
+                </button>
+              </div>
+            )}
+
+            {/* User Info Button */}
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center justify-between w-full px-6 py-4 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center min-w-0">
+                {user.avatarUrl ? (
+                  <img
+                    src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl}`}
+                    alt="User avatar"
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 font-semibold text-lg">
+                      {user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <div className="ml-3 text-left min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                  {user.licenseTier && (
+                    <p className="text-xs font-medium text-blue-600 capitalize mt-0.5">
+                      {user.licenseTier} Plan
+                    </p>
+                  )}
+                </div>
+              </div>
+              {userMenuOpen ? (
+                <ChevronUp className="h-5 w-5 text-gray-400 flex-shrink-0 ml-2" />
+              ) : (
+                <ChevronDown className="h-5 w-5 text-gray-400 flex-shrink-0 ml-2" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -215,8 +289,8 @@ export default function DashboardLayout({
               <div className="bg-gray-50 p-3 rounded mt-4">
                 <p className="text-xs text-gray-600">
                   <strong>Questions or found a bug?</strong> Contact support at{' '}
-                  <a href="mailto:support@focuswithfocal.io" className="text-blue-600 hover:underline">
-                    support@focuswithfocal.io
+                  <a href="mailto:support@focuswithfocal.com" className="text-blue-600 hover:underline">
+                    support@focuswithfocal.com
                   </a>
                 </p>
               </div>
@@ -238,15 +312,15 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar */}
-        <div className="sticky top-0 z-10 flex items-center h-16 px-4 bg-white border-b border-gray-200 lg:px-8">
+        <div className="sticky top-0 z-10 flex items-center h-16 px-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden text-gray-500 hover:text-gray-700"
+            className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex-1" />
-          {/* Future: notifications, profile dropdown, etc. */}
+          <ThemeToggle />
         </div>
 
         {/* Page content */}

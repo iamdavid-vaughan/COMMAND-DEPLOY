@@ -9,6 +9,7 @@ const { getModels } = require('../models');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const { Readable } = require('stream');
+const logger = require('../utils/logger');
 
 // Storage quotas per pricing tier (in GB)
 // Updated to match pricing_tiers table in database
@@ -87,7 +88,7 @@ class StorageManager {
         }
       });
 
-      console.log(`📦 [STORAGE] S3 client initialized (bucket: ${this.bucketName}, region: ${this.region})`);
+      logger.info('Storage: S3 client initialized', { bucket: this.bucketName, region: this.region });
     }
   }
 
@@ -98,7 +99,7 @@ class StorageManager {
     const { User } = getModels();
 
     try {
-      console.log(`📦 [STORAGE] Initializing storage for user ${userId}`);
+      logger.info('Storage: Initializing user storage', { userId, licenseTier });
 
       // Ensure S3 client is initialized
       this.ensureS3Client();
@@ -140,7 +141,7 @@ class StorageManager {
       // Set up lifecycle policies
       await this.setupLifecyclePolicies(userId);
 
-      console.log(`✅ [STORAGE] Initialized storage for user ${userId} with ${STORAGE_QUOTAS[licenseTier]}GB quota`);
+      logger.info('Storage: User storage initialized', { userId, quotaGB: STORAGE_QUOTAS[licenseTier], licenseTier });
 
       return {
         success: true,
@@ -149,7 +150,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to initialize storage for user ${userId}:`, error);
+      logger.error('Storage: Failed to initialize user storage', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -224,9 +225,9 @@ class StorageManager {
         LifecycleConfiguration: lifecycleConfiguration
       }));
 
-      console.log(`✅ [STORAGE] Lifecycle policies configured for user ${userId}`);
+      logger.info('Storage: Lifecycle policies configured', { userId });
     } catch (error) {
-      console.warn(`⚠️  [STORAGE] Could not set lifecycle policies:`, error.message);
+      logger.warn('Storage: Could not set lifecycle policies', { userId, error: error.message });
       // Non-fatal - continue without lifecycle policies
     }
   }
@@ -281,7 +282,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to calculate storage for user ${userId}:`, error);
+      logger.error('Storage: Failed to calculate storage usage', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -353,7 +354,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to upload file:`, error);
+      logger.error('Storage: Failed to upload file', { userId, deploymentId, fileName, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -389,7 +390,7 @@ class StorageManager {
       // Recalculate storage usage
       await this.calculateStorageUsage(userId);
 
-      console.log(`✅ [STORAGE] Deleted ${objects.Contents.length} files for deployment ${deploymentId}`);
+      logger.info('Storage: Deleted deployment files', { userId, deploymentId, deletedCount: objects.Contents.length });
 
       return {
         success: true,
@@ -397,7 +398,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to delete deployment storage:`, error);
+      logger.error('Storage: Failed to delete deployment storage', { userId, deploymentId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -420,7 +421,7 @@ class StorageManager {
       where: { id: userId }
     });
 
-    console.log(`✅ [STORAGE] Upgraded user ${userId} storage quota to ${newQuota}GB (${newLicenseTier} tier)`);
+    logger.info('Storage: Upgraded user storage quota', { userId, quotaGB: newQuota, licenseTier: newLicenseTier });
 
     return { quotaGB: newQuota };
   }
@@ -458,7 +459,7 @@ class StorageManager {
     const { User } = getModels();
 
     try {
-      console.log(`📦 [STORAGE] Creating archive for user ${userId}`);
+      logger.info('Storage: Creating user archive', { userId });
 
       // Ensure S3 client is initialized
       this.ensureS3Client();
@@ -490,7 +491,7 @@ class StorageManager {
       } while (continuationToken);
 
       if (objects.length === 0) {
-        console.log(`📦 [STORAGE] No files to archive for user ${userId}`);
+        logger.info('Storage: No files to archive', { userId });
         return {
           success: false,
           message: 'No files to archive',
@@ -498,7 +499,7 @@ class StorageManager {
         };
       }
 
-      console.log(`📦 [STORAGE] Found ${objects.length} files to archive`);
+      logger.info('Storage: Found files to archive', { userId, fileCount: objects.length });
 
       // Create archive info in database
       const archiveInfo = {
@@ -518,7 +519,7 @@ class StorageManager {
         where: { id: userId }
       });
 
-      console.log(`✅ [STORAGE] Archive created for user ${userId}: ${archivePath}`);
+      logger.info('Storage: Archive created', { userId, archivePath, fileCount: objects.length });
 
       return {
         success: true,
@@ -529,7 +530,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to create archive for user ${userId}:`, error);
+      logger.error('Storage: Failed to create archive', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -568,7 +569,7 @@ class StorageManager {
         expiresIn: 3600 // 1 hour
       });
 
-      console.log(`✅ [STORAGE] Generated download URL for user ${userId} archive`);
+      logger.info('Storage: Generated archive download URL', { userId, archivePath: user.archive_path });
 
       return {
         downloadUrl,
@@ -578,7 +579,7 @@ class StorageManager {
       };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to generate download URL for user ${userId}:`, error);
+      logger.error('Storage: Failed to generate download URL', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -613,12 +614,12 @@ class StorageManager {
         where: { id: userId }
       });
 
-      console.log(`✅ [STORAGE] Deleted archive for user ${userId}`);
+      logger.info('Storage: Deleted user archive', { userId });
 
       return { success: true, message: 'Archive deleted successfully' };
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to delete archive for user ${userId}:`, error);
+      logger.error('Storage: Failed to delete archive', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -637,19 +638,19 @@ class StorageManager {
 
       // Only create archive if user is inactive/cancelled
       if (user.status !== 'inactive' && user.subscription_status !== 'cancelled') {
-        console.log(`⚠️  [STORAGE] User ${userId} is not inactive, skipping archive`);
+        logger.info('Storage: User not inactive, skipping archive', { userId, status: user.status });
         return { success: false, message: 'User is not inactive' };
       }
 
       // Create archive
       const result = await this.createUserArchive(userId);
 
-      console.log(`✅ [STORAGE] Scheduled archive for inactive user ${userId}`);
+      logger.info('Storage: Scheduled archive for inactive user', { userId });
 
       return result;
 
     } catch (error) {
-      console.error(`❌ [STORAGE] Failed to schedule archive for user ${userId}:`, error);
+      logger.error('Storage: Failed to schedule archive', { userId, error: error.message, stack: error.stack });
       throw error;
     }
   }

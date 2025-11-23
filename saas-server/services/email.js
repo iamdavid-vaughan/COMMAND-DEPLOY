@@ -3,6 +3,7 @@
  */
 
 const postmark = require('postmark');
+const logger = require('../utils/logger');
 
 // Lazy-initialize Postmark client
 let client = null;
@@ -11,7 +12,7 @@ function getPostmarkClient() {
   if (!client) {
     const serverToken = process.env.POSTMARK_SERVER_TOKEN;
     if (!serverToken) {
-      console.warn('⚠️  [EMAIL] POSTMARK_SERVER_TOKEN not configured, emails will not be sent');
+      logger.warn('Email: POSTMARK_SERVER_TOKEN not configured, emails will not be sent');
       return null;
     }
     client = new postmark.ServerClient(serverToken);
@@ -25,7 +26,7 @@ function getPostmarkClient() {
 async function sendPasswordResetEmail(email, resetToken, name) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping password reset email (Postmark not configured)');
+    logger.warn('Email: Skipping password reset email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -89,10 +90,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Password reset email sent to ${email}:`, result.MessageID);
+    logger.info('Email: Password reset email sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending password reset email to ${email}:`, error);
+    logger.error('Email: Error sending password reset email', { email, error: error.message, stack: error.stack });
     throw error;
   }
 }
@@ -103,7 +104,7 @@ The Focal Deploy Team
 async function sendWelcomeEmail(email, name) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping welcome email (Postmark not configured)');
+    logger.warn('Email: Skipping welcome email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -170,10 +171,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Welcome email sent to ${email}:`, result.MessageID);
+    logger.info('Email: Welcome email sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending welcome email to ${email}:`, error);
+    logger.error('Email: Error sending welcome email', { email, error: error.message, stack: error.stack });
     // Don't throw - welcome email failure shouldn't block registration
     return { success: false, error: error.message };
   }
@@ -185,7 +186,7 @@ The Focal Deploy Team
 async function sendPasswordChangedEmail(email, name) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping password changed email (Postmark not configured)');
+    logger.warn('Email: Skipping password changed email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -246,10 +247,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Password changed notification sent to ${email}:`, result.MessageID);
+    logger.info('Email: Password changed notification sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending password changed email to ${email}:`, error);
+    logger.error('Email: Error sending password changed email', { email, error: error.message, stack: error.stack });
     // Don't throw - notification failure shouldn't block password change
     return { success: false, error: error.message };
   }
@@ -261,7 +262,7 @@ The Focal Deploy Team
 async function sendDeploymentStartedEmail(email, name, deploymentData) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping deployment started email (Postmark not configured)');
+    logger.warn('Email: Skipping deployment started email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -349,10 +350,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Deployment started email sent to ${email}:`, result.MessageID);
+    logger.info('Email: Deployment started email sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending deployment started email to ${email}:`, error);
+    logger.error('Email: Error sending deployment started email', { email, error: error.message, stack: error.stack });
     return { success: false, error: error.message };
   }
 }
@@ -363,7 +364,7 @@ The Focal Deploy Team
 async function sendDeploymentSuccessEmail(email, name, deploymentData) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping deployment success email (Postmark not configured)');
+    logger.warn('Email: Skipping deployment success email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -458,10 +459,10 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Deployment success email sent to ${email}:`, result.MessageID);
+    logger.info('Email: Deployment success email sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending deployment success email to ${email}:`, error);
+    logger.error('Email: Error sending deployment success email', { email, error: error.message, stack: error.stack });
     return { success: false, error: error.message };
   }
 }
@@ -472,7 +473,7 @@ The Focal Deploy Team
 async function sendDeploymentFailedEmail(email, name, deploymentData) {
   const client = getPostmarkClient();
   if (!client) {
-    console.warn('⚠️  [EMAIL] Skipping deployment failed email (Postmark not configured)');
+    logger.warn('Email: Skipping deployment failed email (Postmark not configured)', { email });
     return { success: false, error: 'Email service not configured' };
   }
 
@@ -588,10 +589,404 @@ The Focal Deploy Team
       MessageStream: 'outbound'
     });
 
-    console.log(`✅ [EMAIL] Deployment failed email sent to ${email}:`, result.MessageID);
+    logger.info('Email: Deployment failed email sent', { email, messageId: result.MessageID });
     return { success: true, messageId: result.MessageID };
   } catch (error) {
-    console.error(`❌ [EMAIL] Error sending deployment failed email to ${email}:`, error);
+    logger.error('Email: Error sending deployment failed email', { email, error: error.message, stack: error.stack });
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send alert notification email
+ */
+async function sendAlertEmail({ to, deploymentName, alertName, message, severity, triggeredValue }) {
+  const client = getPostmarkClient();
+  if (!client) {
+    logger.warn('Email: Skipping alert email (Postmark not configured)', { to });
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  const dashboardUrl = `${process.env.APP_URL || 'https://app.focuswithfocal.com'}/dashboard/monitoring`;
+  const severityColors = {
+    critical: '#dc2626',
+    warning: '#f59e0b',
+    info: '#3b82f6'
+  };
+  const severityColor = severityColors[severity] || severityColors.warning;
+
+  try {
+    const result = await client.sendEmail({
+      From: process.env.POSTMARK_FROM_EMAIL || 'alerts@focuswithfocal.com',
+      To: to,
+      Subject: `[${severity.toUpperCase()}] ${alertName} - ${deploymentName}`,
+      HtmlBody: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Alert Notification</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+            <div style="background-color: ${severityColor}; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+              <h2 style="margin: 0; font-size: 20px;">⚠️ Alert Triggered</h2>
+            </div>
+
+            <h3 style="color: #1f2937; margin-top: 0;">${alertName}</h3>
+
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background-color: #f3f4f6;">
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Deployment:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${deploymentName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Severity:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: ${severityColor}; font-weight: bold;">${severity.toUpperCase()}</td>
+              </tr>
+              <tr style="background-color: #f3f4f6;">
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Value:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${triggeredValue}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Time:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${new Date().toLocaleString()}</td>
+              </tr>
+            </table>
+
+            <p style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 5px;">
+              <strong>Details:</strong><br>
+              ${message}
+            </p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${dashboardUrl}"
+                 style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                View Monitoring Dashboard
+              </a>
+            </div>
+
+            <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px;">
+              This is an automated alert from Focal Deploy monitoring system.<br>
+              To configure alert settings, visit your dashboard.
+            </p>
+            <p style="color: #666; font-size: 14px;">
+              Best regards,<br>
+              The Focal Deploy Team
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+      TextBody: `
+⚠️ ALERT TRIGGERED
+
+${alertName}
+
+Deployment: ${deploymentName}
+Severity: ${severity.toUpperCase()}
+Value: ${triggeredValue}
+Time: ${new Date().toLocaleString()}
+
+Details:
+${message}
+
+View your monitoring dashboard:
+${dashboardUrl}
+
+This is an automated alert from Focal Deploy monitoring system.
+
+Best regards,
+The Focal Deploy Team
+      `,
+      MessageStream: 'outbound'
+    });
+
+    logger.info('Email: Alert email sent', { to, deploymentName, alertName, messageId: result.MessageID });
+    return { success: true, messageId: result.MessageID };
+  } catch (error) {
+    logger.error('Email: Error sending alert email', { to, error: error.message, stack: error.stack });
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send SSL certificate expiration warning
+ */
+async function sendSSLExpirationEmail({ to, deploymentName, domain, daysUntilExpiry, expiresAt }) {
+  const client = getPostmarkClient();
+  if (!client) {
+    logger.warn('Email: Skipping SSL expiration email (Postmark not configured)', { to });
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  const dashboardUrl = `${process.env.APP_URL || 'https://app.focuswithfocal.com'}/dashboard/monitoring`;
+  const isUrgent = daysUntilExpiry <= 7;
+  const severityColor = isUrgent ? '#dc2626' : '#f59e0b';
+
+  try {
+    const result = await client.sendEmail({
+      From: process.env.POSTMARK_FROM_EMAIL || 'alerts@focuswithfocal.com',
+      To: to,
+      Subject: `${isUrgent ? '[URGENT] ' : ''}SSL Certificate Expiring Soon - ${domain}`,
+      HtmlBody: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>SSL Certificate Expiring</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+            <div style="background-color: ${severityColor}; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+              <h2 style="margin: 0; font-size: 20px;">🔒 SSL Certificate ${isUrgent ? 'EXPIRING SOON' : 'Needs Renewal'}</h2>
+            </div>
+
+            <p>The SSL certificate for <strong>${domain}</strong> will expire in <strong>${daysUntilExpiry} days</strong>.</p>
+
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr style="background-color: #f3f4f6;">
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Deployment:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${deploymentName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Domain:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${domain}</td>
+              </tr>
+              <tr style="background-color: #f3f4f6;">
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Expires:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: ${severityColor}; font-weight: bold;">${new Date(expiresAt).toLocaleDateString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; font-weight: bold; border: 1px solid #e5e7eb;">Days Remaining:</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb;">${daysUntilExpiry} days</td>
+              </tr>
+            </table>
+
+            <div style="background-color: ${isUrgent ? '#fee2e2' : '#fef3c7'}; border-left: 4px solid ${severityColor}; padding: 12px; border-radius: 5px;">
+              <strong>${isUrgent ? '⚠️ URGENT ACTION REQUIRED' : '⚠️ Action Recommended'}:</strong><br>
+              Please renew your SSL certificate as soon as possible to avoid service interruption.
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${dashboardUrl}"
+                 style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                Renew SSL Certificate
+              </a>
+            </div>
+
+            <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px;">
+              Focal Deploy can automatically renew your SSL certificates. Visit your dashboard to enable auto-renewal.
+            </p>
+            <p style="color: #666; font-size: 14px;">
+              Best regards,<br>
+              The Focal Deploy Team
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+      TextBody: `
+🔒 SSL CERTIFICATE ${isUrgent ? 'EXPIRING SOON' : 'NEEDS RENEWAL'}
+
+The SSL certificate for ${domain} will expire in ${daysUntilExpiry} days.
+
+Deployment: ${deploymentName}
+Domain: ${domain}
+Expires: ${new Date(expiresAt).toLocaleDateString()}
+Days Remaining: ${daysUntilExpiry}
+
+${isUrgent ? '⚠️ URGENT ACTION REQUIRED' : '⚠️ Action Recommended'}:
+Please renew your SSL certificate as soon as possible to avoid service interruption.
+
+Renew your certificate:
+${dashboardUrl}
+
+Focal Deploy can automatically renew your SSL certificates. Visit your dashboard to enable auto-renewal.
+
+Best regards,
+The Focal Deploy Team
+      `,
+      MessageStream: 'outbound'
+    });
+
+    logger.info('Email: SSL expiration email sent', { to, domain, daysUntilExpiry, messageId: result.MessageID });
+    return { success: true, messageId: result.MessageID };
+  } catch (error) {
+    logger.error('Email: Error sending SSL expiration email', { to, error: error.message, stack: error.stack });
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send payment failed email (Day 0)
+ */
+async function sendPaymentFailedEmail(email, name, data) {
+  const { gracePeriodEnds, subscriptionPlan } = data;
+  const gracePeriodDate = new Date(gracePeriodEnds).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; margin-bottom: 24px;">
+      <h2 style="margin: 0 0 8px 0; color: #92400E;">Payment Issue</h2>
+      <p style="margin: 0; color: #92400E;">Your recent payment could not be processed.</p>
+    </div>
+
+    <p>Hi ${name},</p>
+
+    <p>We were unable to process your payment for your <strong>${subscriptionPlan || 'Focal Deploy'}</strong> subscription.</p>
+
+    <p><strong>What happens next:</strong></p>
+    <ul>
+      <li>Please update your payment method as soon as possible</li>
+      <li>Your deployments will be suspended in 24 hours if payment is not received</li>
+      <li>All resources will be terminated on <strong>${gracePeriodDate}</strong> if the issue is not resolved</li>
+    </ul>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${process.env.FRONTEND_URL}/dashboard/billing" style="display: inline-block; padding: 14px 28px; background: #2563EB; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Payment Method</a>
+    </div>
+
+    <p style="color: #6B7280; font-size: 14px;">If you have any questions, please contact support.</p>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail(email, 'Action Required: Payment Issue with Your Focal Deploy Account', htmlBody);
+}
+
+/**
+ * Send suspension warning email (Day 1)
+ */
+async function sendSuspensionWarningEmail(email, name, data) {
+  const { daysSinceFailure, gracePeriodEnds } = data;
+  const gracePeriodDate = new Date(gracePeriodEnds).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #FEE2E2; border-left: 4px solid #EF4444; padding: 16px; margin-bottom: 24px;">
+      <h2 style="margin: 0 0 8px 0; color: #991B1B;">Deployments Suspended</h2>
+      <p style="margin: 0; color: #991B1B;">Your deployments have been suspended due to payment issues.</p>
+    </div>
+
+    <p>Hi ${name},</p>
+
+    <p>Due to the unresolved payment issue, we have suspended your deployments. Your servers have been stopped, but your data is safe.</p>
+
+    <p><strong>Important:</strong></p>
+    <ul>
+      <li>Update your payment method to restore your deployments immediately</li>
+      <li>Your data and configuration are preserved</li>
+      <li>If payment is not received by <strong>${gracePeriodDate}</strong>, all resources will be permanently deleted</li>
+    </ul>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${process.env.FRONTEND_URL}/dashboard/billing" style="display: inline-block; padding: 14px 28px; background: #DC2626; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Payment Now</a>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail(email, 'URGENT: Your Focal Deploy Deployments Have Been Suspended', htmlBody);
+}
+
+/**
+ * Send final warning email (Day 3)
+ */
+async function sendFinalWarningEmail(email, name, data) {
+  const { terminationDate } = data;
+  const termDate = new Date(terminationDate).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #7F1D1D; color: white; padding: 20px; margin-bottom: 24px; border-radius: 8px;">
+      <h2 style="margin: 0 0 8px 0;">FINAL WARNING: Account Termination Imminent</h2>
+      <p style="margin: 0;">Your account and all deployments will be permanently deleted on ${termDate}</p>
+    </div>
+
+    <p>Hi ${name},</p>
+
+    <p>This is your final warning. Your payment issue has not been resolved, and your account is scheduled for permanent termination.</p>
+
+    <p><strong>On ${termDate}:</strong></p>
+    <ul style="color: #991B1B;">
+      <li>All EC2 instances will be terminated</li>
+      <li>All S3 buckets and data will be deleted</li>
+      <li>All configuration and backups will be removed</li>
+      <li><strong>This action cannot be undone</strong></li>
+    </ul>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${process.env.FRONTEND_URL}/dashboard/billing" style="display: inline-block; padding: 14px 28px; background: #7F1D1D; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">SAVE MY ACCOUNT</a>
+    </div>
+
+    <p>If you intended to cancel your account, no action is needed.</p>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail(email, 'FINAL WARNING: Your Focal Deploy Account Will Be Deleted', htmlBody);
+}
+
+/**
+ * Send termination notice email (Day 5+)
+ */
+async function sendTerminationNoticeEmail(email, name) {
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2 style="color: #6B7280;">Account Terminated</h2>
+
+    <p>Hi ${name},</p>
+
+    <p>Due to unresolved payment issues, your Focal Deploy account has been terminated and all resources have been deleted.</p>
+
+    <p>If you'd like to use Focal Deploy again in the future, you're welcome to create a new account.</p>
+
+    <p style="color: #6B7280;">Thank you for trying Focal Deploy.</p>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail(email, 'Your Focal Deploy Account Has Been Terminated', htmlBody);
+}
+
+// Helper function to send email
+async function sendEmail(to, subject, htmlBody) {
+  try {
+    const client = new (require('postmark').ServerClient)(process.env.POSTMARK_SERVER_TOKEN);
+    await client.sendEmail({
+      From: process.env.EMAIL_FROM || 'noreply@focuswithfocal.com',
+      To: to,
+      Subject: subject,
+      HtmlBody: htmlBody
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send email:', error);
     return { success: false, error: error.message };
   }
 }
@@ -602,5 +997,11 @@ module.exports = {
   sendPasswordChangedEmail,
   sendDeploymentStartedEmail,
   sendDeploymentSuccessEmail,
-  sendDeploymentFailedEmail
+  sendDeploymentFailedEmail,
+  sendAlertEmail,
+  sendSSLExpirationEmail,
+  sendPaymentFailedEmail,
+  sendSuspensionWarningEmail,
+  sendFinalWarningEmail,
+  sendTerminationNoticeEmail
 };

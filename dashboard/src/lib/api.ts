@@ -6,13 +6,22 @@ import axios, { AxiosError, AxiosResponse } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.focuswithfocal.io';
 
-// Create axios instance
+// Create axios instance for authenticated requests
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+});
+
+// Create public axios instance (no auth) for public endpoints
+export const publicApi = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: false,
 });
 
 // Request interceptor - attach JWT token
@@ -107,6 +116,18 @@ export const userAPI = {
     newPassword: string;
   }) => api.post('/api/user/password', data),
 
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return api.post('/api/user/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  deleteAvatar: () => api.delete('/api/user/avatar'),
+
   deleteAccount: () => api.delete('/api/user/account'),
 };
 
@@ -164,6 +185,12 @@ export const deploymentsAPI = {
 
   logs: (id: string) =>
     api.get(`/api/deployments/${id}/logs`),
+
+  retry: (id: string) =>
+    api.post(`/api/deployments/${id}/retry`),
+
+  cancel: (id: string) =>
+    api.patch(`/api/deployments/${id}/cancel`),
 };
 
 export const credentialsAPI = {
@@ -172,7 +199,7 @@ export const credentialsAPI = {
   get: (id: string) => api.get(`/api/credentials/${id}`),
 
   create: (data: {
-    type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github';
+    type: 'aws' | 'digitalocean' | 'cloudflare' | 'godaddy' | 'route53' | 'github' | 'gcp';
     data: any;
     metadata?: any;
   }) => api.post('/api/credentials', data),
@@ -184,9 +211,62 @@ export const credentialsAPI = {
     api.delete(`/api/credentials/${id}`),
 };
 
+export const gcpCredentialsAPI = {
+  list: () => api.get('/api/gcp-credentials'),
+
+  create: (data: {
+    projectId: string;
+    serviceAccountKey: any;
+    region?: string;
+    zone?: string;
+    isDefault?: boolean;
+  }) => api.post('/api/gcp-credentials', data),
+
+  update: (id: string, data: {
+    serviceAccountKey?: any;
+    region?: string;
+    zone?: string;
+    isDefault?: boolean;
+  }) => api.patch(`/api/gcp-credentials/${id}`, data),
+
+  delete: (id: string) => api.delete(`/api/gcp-credentials/${id}`),
+
+  test: (id: string) => api.post(`/api/gcp-credentials/${id}/test`),
+};
+
+export const azureCredentialsAPI = {
+  list: () => api.get('/api/azure-credentials'),
+
+  get: (id: string) => api.get(`/api/azure-credentials/${id}`),
+
+  create: (data: {
+    subscriptionId: string;
+    tenantId: string;
+    clientId: string;
+    clientSecret: string;
+    resourceGroup?: string;
+    region?: string;
+    isDefault?: boolean;
+  }) => api.post('/api/azure-credentials', data),
+
+  update: (id: string, data: {
+    clientSecret?: string;
+    resourceGroup?: string;
+    region?: string;
+    isDefault?: boolean;
+  }) => api.patch(`/api/azure-credentials/${id}`, data),
+
+  delete: (id: string) => api.delete(`/api/azure-credentials/${id}`),
+
+  test: (id: string) => api.post(`/api/azure-credentials/${id}/test`),
+};
+
 export const usageAPI = {
   current: (period?: string) =>
     api.get('/api/usage', { params: { period } }),
+
+  daily: (days?: number) =>
+    api.get('/api/usage/daily', { params: { days } }),
 
   history: (months?: number) =>
     api.get('/api/usage/history', { params: { months } }),
@@ -245,6 +325,18 @@ export const billingAPI = {
   }) => api.post('/api/billing/payment-method', data),
 
   getPlans: () => api.get('/api/billing/plans'),
+
+  // Seat management
+  getSeats: () => api.get('/api/billing/seats'),
+
+  previewSeats: (action: 'add' | 'remove', seats: number) =>
+    api.get('/api/billing/seats/preview', { params: { action, seats } }),
+
+  addSeats: (seats: number) =>
+    api.post('/api/billing/seats/add', { seats }),
+
+  removeSeats: (seats: number) =>
+    api.post('/api/billing/seats/remove', { seats }),
 };
 
 export const pricingAPI = {
@@ -266,6 +358,36 @@ export const apiKeysAPI = {
     api.patch(`/api/api-keys/${id}`, data),
 
   revoke: (id: string) => api.delete(`/api/api-keys/${id}`),
+};
+
+export const teamsAPI = {
+  // Get team members
+  getMembers: () => api.get('/api/teams/members'),
+
+  // Get invitations
+  getInvitations: () => api.get('/api/teams/invitations'),
+
+  // Invite team member
+  invite: (data: {
+    email: string;
+    role: 'admin' | 'member';
+  }) => api.post('/api/teams/invite', data),
+
+  // Accept invitation
+  acceptInvite: (token: string) =>
+    api.post('/api/teams/accept-invite', { token }),
+
+  // Remove team member
+  removeMember: (memberId: string) =>
+    api.delete(`/api/teams/members/${memberId}`),
+
+  // Update member role
+  updateMemberRole: (memberId: string, role: 'admin' | 'member') =>
+    api.patch(`/api/teams/members/${memberId}/role`, { role }),
+
+  // Revoke invitation
+  revokeInvitation: (invitationId: string) =>
+    api.delete(`/api/teams/invitations/${invitationId}`),
 };
 
 export const adminAPI = {

@@ -21,6 +21,7 @@ function OAuthCallbackContent() {
         const token = searchParams.get('token');
         const providerParam = searchParams.get('provider');
         const errorParam = searchParams.get('error');
+        const needsTerms = searchParams.get('needsTerms');
 
         if (errorParam) {
           setError(decodeURIComponent(errorParam));
@@ -39,7 +40,7 @@ function OAuthCallbackContent() {
         }
 
         // Fetch user data with the token
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/me`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/user/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -56,10 +57,18 @@ function OAuthCallbackContent() {
 
         setStatus('success');
 
-        // Redirect to dashboard after 1 second
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 1000);
+        // Check if user needs to accept terms
+        if (needsTerms === 'true') {
+          // Redirect to terms acceptance page after 1 second
+          setTimeout(() => {
+            router.push('/accept-terms');
+          }, 1000);
+        } else {
+          // Redirect to dashboard after 1 second
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 1000);
+        }
       } catch (err: any) {
         console.error('OAuth callback error:', err);
         setError(err.message || 'An error occurred during authentication');
@@ -72,7 +81,7 @@ function OAuthCallbackContent() {
 
   if (status === 'processing') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4">
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
@@ -90,7 +99,7 @@ function OAuthCallbackContent() {
 
   if (status === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-green-50 flex items-center justify-center px-4">
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
@@ -110,7 +119,7 @@ function OAuthCallbackContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-red-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-6">

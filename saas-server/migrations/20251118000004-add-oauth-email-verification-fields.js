@@ -14,47 +14,64 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     console.log('Adding OAuth and email verification fields to users table...');
 
-    // Add company field
-    await queryInterface.addColumn('users', 'company', {
+    // Helper to safely add column if it doesn't exist
+    const safeAddColumn = async (table, column, options) => {
+      try {
+        await queryInterface.addColumn(table, column, options);
+        console.log(`✅ Added ${column} column`);
+      } catch (e) {
+        if (e.message.includes('already exists')) {
+          console.log(`⏭️ ${column} column already exists, skipping`);
+        } else {
+          throw e;
+        }
+      }
+    };
+
+    // Helper to safely add index if it doesn't exist
+    const safeAddIndex = async (table, columns, options) => {
+      try {
+        await queryInterface.addIndex(table, columns, options);
+        console.log(`✅ Added index ${options.name}`);
+      } catch (e) {
+        if (e.message.includes('already exists')) {
+          console.log(`⏭️ Index ${options.name} already exists, skipping`);
+        } else {
+          throw e;
+        }
+      }
+    };
+
+    await safeAddColumn('users', 'company', {
       type: Sequelize.STRING(255),
       allowNull: true
     });
-    console.log('✅ Added company column');
 
-    // Add email_verified field
-    await queryInterface.addColumn('users', 'email_verified', {
+    await safeAddColumn('users', 'email_verified', {
       type: Sequelize.BOOLEAN,
-      allowNull: false,
+      allowNull: true,
       defaultValue: false
     });
-    console.log('✅ Added email_verified column');
 
-    // Add is_active field
-    await queryInterface.addColumn('users', 'is_active', {
+    await safeAddColumn('users', 'is_active', {
       type: Sequelize.BOOLEAN,
-      allowNull: false,
+      allowNull: true,
       defaultValue: false
     });
-    console.log('✅ Added is_active column');
 
-    // Add oauth_provider field
-    await queryInterface.addColumn('users', 'oauth_provider', {
+    await safeAddColumn('users', 'oauth_provider', {
       type: Sequelize.STRING(20),
       allowNull: true,
       comment: 'OAuth provider: google, github, or NULL for email signup'
     });
-    console.log('✅ Added oauth_provider column');
 
-    // Add oauth_id field
-    await queryInterface.addColumn('users', 'oauth_id', {
+    await safeAddColumn('users', 'oauth_id', {
       type: Sequelize.STRING(255),
       allowNull: true,
       comment: 'Unique ID from OAuth provider'
     });
-    console.log('✅ Added oauth_id column');
 
-    // Create index on oauth_provider and oauth_id for faster OAuth lookups
-    await queryInterface.addIndex('users', ['oauth_provider', 'oauth_id'], {
+    await safeAddIndex('users', ['oauth_provider', 'oauth_id'], {
       name: 'idx_users_oauth',
       unique: true,
       where: {
@@ -63,13 +80,10 @@ module.exports = {
         }
       }
     });
-    console.log('✅ Added index on oauth_provider and oauth_id');
 
-    // Create index on email_verified for filtering
-    await queryInterface.addIndex('users', ['email_verified'], {
+    await safeAddIndex('users', ['email_verified'], {
       name: 'idx_users_email_verified'
     });
-    console.log('✅ Added index on email_verified');
 
     console.log('✅ OAuth and email verification migration completed');
   },

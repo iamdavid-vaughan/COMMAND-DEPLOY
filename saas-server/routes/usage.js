@@ -60,6 +60,15 @@ router.get('/', async (req, res, next) => {
       r => r.resource_type === 'deployment' && r.action === 'create'
     ).length;
 
+    // Get S3 and EC2 usage
+    const s3BucketsCreated = usageRecords.filter(
+      r => r.resource_type === 's3_bucket' && r.action === 'create'
+    ).length;
+
+    const ec2InstancesCreated = usageRecords.filter(
+      r => r.resource_type === 'ec2_instance' && r.action === 'create'
+    ).length;
+
     res.json({
       success: true,
       billingPeriod: currentPeriod,
@@ -67,6 +76,12 @@ router.get('/', async (req, res, next) => {
         deployments: {
           total: deploymentsThisPeriod,
           active: activeDeployments
+        },
+        s3Buckets: {
+          created: s3BucketsCreated
+        },
+        ec2Instances: {
+          created: ec2InstancesCreated
         },
         apiCalls: usageRecords.filter(r => r.resource_type === 'api').length,
         resources: Object.values(aggregated)
@@ -318,6 +333,79 @@ router.get('/limits', async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * GET /api/usage/daily - Get daily usage for the last N days (for charts)
+ */
+router.get('/daily',
+  [
+    query('days').optional().isInt({ min: 1, max: 90 }).toInt()
+  ],
+  async (req, res, next) => {
+    try {
+      // Validate input
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { UsageTracking } = getModels();
+      const userId = req.user.userId;
+      const days = parseInt(req.query.days) || 7;
+
+      // Calculate date range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      // Fetch usage records for date range
+      const usageRecords = await UsageTracking.findAll({
+        where: {
+          user_id: userId,
+          tracked_at: {
+            [Op.gte]: startDate
+          }
+        },
+        order: [['tracked_at', 'ASC']]
+      });
+
+      // Group by day
+      const dailyData = {};
+      for (let i = 0; i < days; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - (days - 1 - i));
+        const dateKey = date.toISOString().split('T')[0];
+        dailyData[dateKey] = {
+          date: dateKey,
+          deployments: 0,
+          apiCalls: 0
+        };
+      }
+
+      // Aggregate records by day
+      usageRecords.forEach(record => {
+        const dateKey = new Date(record.tracked_at).toISOString().split('T')[0];
+        if (dailyData[dateKey]) {
+          if (record.resource_type === 'deployment' && record.action === 'create') {
+            dailyData[dateKey].deployments += 1;
+          }
+          if (record.resource_type === 'api') {
+            dailyData[dateKey].apiCalls += 1;
+          }
+        }
+      });
+
+      res.json({
+        success: true,
+        days,
+        data: Object.values(dailyData)
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * GET /api/usage/export - Export usage data

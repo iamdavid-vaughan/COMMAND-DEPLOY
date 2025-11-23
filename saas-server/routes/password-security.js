@@ -79,7 +79,7 @@ router.post('/check', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error checking password:', error);
+    logger.error('Error checking password:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to check password',
@@ -111,7 +111,7 @@ router.post('/check-strength', requireAuth, async (req, res) => {
       strength
     });
   } catch (error) {
-    console.error('Error checking password strength:', error);
+    logger.error('Error checking password strength:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to check password strength',
@@ -156,7 +156,7 @@ router.post('/generate', requireAuth, async (req, res) => {
       check: result
     });
   } catch (error) {
-    console.error('Error generating password:', error);
+    logger.error('Error generating password:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate password',
@@ -220,7 +220,7 @@ router.post('/batch-check', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error in batch password check:', error);
+    logger.error('Error in batch password check:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to check passwords',

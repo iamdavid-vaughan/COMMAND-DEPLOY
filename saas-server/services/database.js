@@ -4,6 +4,7 @@
 
 const { Sequelize } = require('sequelize');
 const chalk = require('chalk');
+const logger = require('../utils/logger');
 
 let sequelize = null;
 
@@ -17,7 +18,7 @@ async function initializeDatabase() {
 
     sequelize = new Sequelize(databaseUrl, {
       dialect: 'postgres',
-      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      logging: process.env.NODE_ENV === 'development' ? (msg) => logger.debug('Sequelize:', { query: msg }) : false,
       pool: {
         max: 10,
         min: 0,
@@ -28,11 +29,11 @@ async function initializeDatabase() {
 
     // Test connection
     await sequelize.authenticate();
-    console.log(chalk.green('✓ Database connection established successfully'));
+    logger.info('Database: Connection established successfully');
 
     return sequelize;
   } catch (error) {
-    console.error(chalk.red('✗ Unable to connect to database:'), error.message);
+    logger.error('Database: Unable to connect', { error: error.message, stack: error.stack });
     throw error;
   }
 }
@@ -53,7 +54,7 @@ function getDatabase() {
 async function closeDatabase() {
   if (sequelize) {
     await sequelize.close();
-    console.log(chalk.yellow('Database connection closed'));
+    logger.info('Database: Connection closed');
   }
 }
 

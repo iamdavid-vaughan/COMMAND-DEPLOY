@@ -53,20 +53,20 @@ module.exports = {
     console.log('✅ Created deployment_logs table');
 
     // Create indexes for better query performance
-    await queryInterface.addIndex('deployment_logs', ['deployment_id'], {
+    try { await queryInterface.addIndex('deployment_logs', ['deployment_id'], {
       name: 'idx_deployment_logs_deployment_id'
     });
-    console.log('✅ Added index on deployment_id');
+    } catch(e) { if (!e.message.includes('already exists')) throw e; } console.log('Added index on deployment_id');
 
-    await queryInterface.addIndex('deployment_logs', ['created_at'], {
+    try { await queryInterface.addIndex('deployment_logs', ['created_at'], {
       name: 'idx_deployment_logs_created_at'
     });
-    console.log('✅ Added index on created_at');
+    } catch(e) { if (!e.message.includes('already exists')) throw e; } console.log('Added index on created_at');
 
-    await queryInterface.addIndex('deployment_logs', ['level'], {
+    try { await queryInterface.addIndex('deployment_logs', ['level'], {
       name: 'idx_deployment_logs_level'
     });
-    console.log('✅ Added index on level');
+    } catch(e) { if (!e.message.includes('already exists')) throw e; } console.log('Added index on level');
 
     console.log('✅ Deployment logs table migration completed');
   },

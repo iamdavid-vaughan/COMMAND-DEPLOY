@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const { generateToken, refreshToken } = require('../middleware/auth');
 const { getModels } = require('../models');
+const logger = require('../utils/logger');
 const { sendPasswordResetEmail, sendWelcomeEmail } = require('../services/email');
 
 const router = express.Router();
@@ -81,9 +82,9 @@ router.post('/register',
       setImmediate(async () => {
         try {
           await storageManager.initializeUserStorage(user.id, user.license_tier);
-          console.log(`✅ [AUTH] Storage initialized for user ${user.id}`);
+          logger.info(`[AUTH] Storage initialized for user ${user.id}`);
         } catch (error) {
-          console.error(`❌ [AUTH] Failed to initialize storage for user ${user.id}:`, error);
+          logger.error('[AUTH] Failed to initialize storage for user ${user.id}:`, error);
         }
       });
 
@@ -209,7 +210,7 @@ router.post('/login',
         expiresIn: '7d'
       };
 
-      console.log('🔐 LOGIN RESPONSE:', JSON.stringify({
+      logger.info('🔐 LOGIN RESPONSE:', JSON.stringify({
         email: user.email,
         tokenLength: token ? token.length : 0,
         tokenPreview: token ? token.substring(0, 20) + '...' : 'NO TOKEN',
@@ -232,14 +233,51 @@ router.post('/refresh', refreshToken);
 
 /**
  * POST /api/auth/logout
- * Logout user (client-side token removal, optional server-side blacklist)
+ * Logout user and terminate session
  */
-router.post('/logout', async (req, res) => {
-  // TODO: Add token to blacklist if implementing token blacklisting
+router.post('/logout', authenticate, async (req, res) => {
+  try {
+    const sessionTrackingService = require('../services/sessionTracking');
 
-  res.json({
-    message: 'Logout successful'
-  });
+    // Get JWT token from request
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+
+      // Initialize session service and terminate current session
+      await sessionTrackingService.initialize();
+      const jwtTokenHash = sessionTrackingService.hashToken(token);
+
+      // Find and terminate the session
+      const [session] = await sessionTrackingService.db.query(`
+        SELECT id FROM active_sessions
+        WHERE jwt_token_hash = :tokenHash
+      `, {
+        replacements: { tokenHash: jwtTokenHash },
+        type: sessionTrackingService.db.QueryTypes.SELECT
+      });
+
+      if (session) {
+        await sessionTrackingService.terminateSession(session.id);
+        logger.info('Session terminated on logout', {
+          userId: req.user.userId,
+          sessionId: session.id
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    logger.error('Error during logout', { error: error.message });
+    // Still return success to client even if session termination fails
+    res.json({
+      success: true,
+      message: 'Logout successful'
+    });
+  }
 });
 
 /**
@@ -274,7 +312,7 @@ router.post('/forgot-password',
         user.password_reset_expires = resetTokenExpires;
         await user.save();
 
-        console.log(`🔐 [AUTH] Password reset requested for ${email}`);
+        logger.info(`[AUTH] Password reset requested for ${email}`);
 
         // Send reset email (don't await to avoid timing attacks)
         sendPasswordResetEmail(
@@ -282,10 +320,10 @@ router.post('/forgot-password',
           resetToken, // Send unhashed token in email
           `${user.first_name} ${user.last_name}`.trim()
         ).catch(err => {
-          console.error('❌ [AUTH] Error sending reset email:', err);
+          logger.error('❌ [AUTH] Error sending reset email:', err);
         });
       } else {
-        console.log(`⚠️  [AUTH] Password reset requested for non-existent email: ${email}`);
+        logger.info(`[AUTH] Password reset requested for non-existent email: ${email}`);
       }
 
       // Always return success to prevent email enumeration
@@ -340,7 +378,7 @@ router.post('/reset-password',
       });
 
       if (!user) {
-        console.log('⚠️  [AUTH] Invalid or expired reset token');
+        logger.info('⚠️  [AUTH] Invalid or expired reset token');
         return res.status(400).json({
           error: 'Invalid Token',
           message: 'Password reset token is invalid or has expired'
@@ -357,7 +395,7 @@ router.post('/reset-password',
       user.password_reset_expires = null;
       await user.save();
 
-      console.log(`✅ [AUTH] Password reset successful for ${user.email}`);
+      logger.info(`[AUTH] Password reset successful for ${user.email}`);
 
       res.json({
         success: true,

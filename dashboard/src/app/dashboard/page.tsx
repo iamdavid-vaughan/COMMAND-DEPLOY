@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { deploymentsAPI, usageAPI } from '@/lib/api';
+import api, { deploymentsAPI, usageAPI, userAPI } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import OnboardingModal from '@/components/OnboardingModal';
 import {
   Rocket,
   Server,
@@ -62,10 +63,37 @@ export default function DashboardPage() {
   const [usageData, setUsageData] = useState<UsageData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
+    checkOnboardingStatus();
   }, []);
+
+  const checkOnboardingStatus = async () => {
+    try {
+      const response = await userAPI.profile();
+      const profile = response.data.user || response.data;
+
+      // Check if user has an active subscription with payment
+      let hasPaymentSetup = false;
+      try {
+        const subResponse = await api.get('/api/billing/subscription');
+        const subscription = subResponse.data.subscription;
+        // User has payment set up if they have an active subscription that's not marked as requiring payment
+        hasPaymentSetup = subscription && subscription.status === 'active' && !subscription.requiresPayment;
+      } catch (subError) {
+        console.log('No subscription found, needs onboarding');
+      }
+
+      // Show onboarding if user hasn't set up payment yet
+      if (!hasPaymentSetup) {
+        setShowOnboarding(true);
+      }
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -78,8 +106,16 @@ export default function DashboardPage() {
       setRecentDeployments(deployments);
 
       // Fetch usage data
-      const usageResponse = await usageAPI.current('month');
-      const usage = usageResponse.data;
+      const usageResponse = await usageAPI.current();
+      const usage = usageResponse.data.usage;
+
+      // Fetch daily usage data for charts (last 7 days)
+      const dailyResponse = await usageAPI.daily(7);
+      const dailyData = dailyResponse.data.data.map((day: any) => ({
+        date: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        deployments: day.deployments,
+        apiCalls: day.apiCalls
+      }));
 
       // Calculate stats
       const activeCount = deployments.filter(
@@ -87,15 +123,14 @@ export default function DashboardPage() {
       ).length;
 
       setStats({
-        totalDeployments: usage.totalDeployments || deployments.length,
-        activeInstances: activeCount,
-        deploymentsThisMonth: usage.deploymentsThisMonth || 0,
+        totalDeployments: usage?.deployments?.total || deployments.length,
+        activeInstances: usage?.deployments?.active || activeCount,
+        deploymentsThisMonth: usage?.deployments?.total || 0,
         currentTier: user?.licenseTier || 'starter',
       });
 
-      // Generate mock usage trend data (replace with real data from API)
-      const mockUsageData = generateMockUsageData();
-      setUsageData(mockUsageData);
+      // Use real usage data instead of mock data
+      setUsageData(dailyData);
 
       setLoading(false);
     } catch (err: any) {
@@ -103,21 +138,6 @@ export default function DashboardPage() {
       setError(err.response?.data?.message || 'Failed to load dashboard data');
       setLoading(false);
     }
-  };
-
-  const generateMockUsageData = (): UsageData[] => {
-    const data = [];
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      data.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        deployments: Math.floor(Math.random() * 10) + 1,
-        apiCalls: Math.floor(Math.random() * 100) + 20,
-      });
-    }
-    return data;
   };
 
   const getStatusIcon = (status: string) => {
@@ -179,6 +199,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
+
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>

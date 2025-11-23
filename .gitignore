@@ -156,6 +156,16 @@ logs
 aws-credentials.json
 credentials.json
 
-# Test directory
+# Backup files and temporary credentials (SECURITY)
+*.backup
+*.bak
+backup_*.sql
+*-backup-*
+temp-creds.txt
+*creds*.txt
+
+# Test directory and test files
 focal-test/
 saas-server-deploy.tar.gz
+test-*.js
+*-test.js

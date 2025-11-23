@@ -17,6 +17,7 @@ const {
   CreateTagsCommand,
 } = require('@aws-sdk/client-ec2');
 const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
+const logger = require('../utils/logger');
 
 /**
  * Create EC2 deployment with user's AWS credentials
@@ -43,17 +44,17 @@ async function createDeployment(awsCredentials, deploymentConfig) {
 
   try {
     // Step 1: Verify credentials
-    console.log(`🚀 [EC2] Starting deployment for project: ${projectName}`);
+    logger.info('EC2: Starting deployment', { projectName, region, instanceType });
     const accountId = await verifyCredentials(accessKeyId, secretAccessKey, region);
-    console.log(`✅ [EC2] Verified AWS credentials for account: ${accountId}`);
+    logger.info('EC2: Verified AWS credentials', { accountId });
 
     // Step 2: Create or get security group
     const securityGroupId = await createSecurityGroup(ec2Client, projectName);
-    console.log(`✅ [EC2] Security group created/found: ${securityGroupId}`);
+    logger.info('EC2: Security group ready', { securityGroupId });
 
     // Step 3: Get latest Amazon Linux 2 AMI (hardcoded for common regions)
     const amiId = getAmazonLinuxAMI(region);
-    console.log(`✅ [EC2] Using AMI: ${amiId}`);
+    logger.info('EC2: Using AMI', { amiId });
 
     // Step 4: Create user data script for instance initialization
     const userData = createUserDataScript(projectName, configuration);
@@ -66,15 +67,15 @@ async function createDeployment(awsCredentials, deploymentConfig) {
       userData,
       projectName,
     });
-    console.log(`✅ [EC2] Instance launched: ${instanceId}`);
+    logger.info('EC2: Instance launched', { instanceId });
 
     // Step 6: Wait for instance to be running
     const instance = await waitForInstance(ec2Client, instanceId);
-    console.log(`✅ [EC2] Instance running with private IP: ${instance.privateIp}`);
+    logger.info('EC2: Instance running', { instanceId, privateIp: instance.privateIp });
 
     // Step 7: Allocate and associate Elastic IP
     const publicIp = await allocateElasticIP(ec2Client, instanceId);
-    console.log(`✅ [EC2] Elastic IP allocated: ${publicIp}`);
+    logger.info('EC2: Elastic IP allocated', { publicIp, instanceId });
 
     return {
       success: true,
@@ -86,7 +87,7 @@ async function createDeployment(awsCredentials, deploymentConfig) {
       message: 'EC2 instance created successfully',
     };
   } catch (error) {
-    console.error(`❌ [EC2] Deployment failed:`, error);
+    logger.error('EC2: Deployment failed', { projectName, error: error.message, stack: error.stack });
     throw new Error(`EC2 deployment failed: ${error.message}`);
   }
 }
@@ -107,7 +108,7 @@ async function terminateDeployment(awsCredentials, deploymentInfo) {
   });
 
   try {
-    console.log(`🗑️  [EC2] Terminating instance: ${instanceId}`);
+    logger.info('EC2: Terminating instance', { instanceId, region });
 
     // Terminate instance
     const command = new TerminateInstancesCommand({
@@ -115,7 +116,7 @@ async function terminateDeployment(awsCredentials, deploymentInfo) {
     });
 
     await ec2Client.send(command);
-    console.log(`✅ [EC2] Instance terminated: ${instanceId}`);
+    logger.info('EC2: Instance terminated', { instanceId });
 
     // Note: Elastic IP should be released manually or via cleanup job
     // to avoid leaving orphaned IPs
@@ -125,7 +126,7 @@ async function terminateDeployment(awsCredentials, deploymentInfo) {
       message: 'Instance terminated successfully',
     };
   } catch (error) {
-    console.error(`❌ [EC2] Termination failed:`, error);
+    logger.error('EC2: Termination failed', { instanceId, region, error: error.message, stack: error.stack });
     throw new Error(`EC2 termination failed: ${error.message}`);
   }
 }
@@ -165,7 +166,7 @@ async function getDeploymentStatus(awsCredentials, deploymentInfo) {
       launchTime: instance.LaunchTime,
     };
   } catch (error) {
-    console.error(`❌ [EC2] Status check failed:`, error);
+    logger.error('EC2: Status check failed', { instanceId, error: error.message, stack: error.stack });
     throw new Error(`Failed to get instance status: ${error.message}`);
   }
 }

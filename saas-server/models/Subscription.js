@@ -36,6 +36,11 @@ module.exports = (sequelize) => {
       allowNull: false,
       // starter, professional, max, enterprise
     },
+    license_tier: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      // starter, professional, max, enterprise
+    },
     billing_cycle: {
       type: DataTypes.STRING(20),
       allowNull: false,
@@ -46,11 +51,29 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
+    amount_cents: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    currency: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: 'USD'
+    },
+    payment_method_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
     status: {
       type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'active'
       // active, past_due, cancelled, suspended
+    },
+    cancel_at_period_end: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false
     },
     current_period_start: {
       type: DataTypes.DATE,

@@ -17,6 +17,8 @@ import {
   Key,
   Copy,
   RefreshCw,
+  Upload,
+  Camera,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -62,6 +64,11 @@ export default function SettingsPage() {
     usageAlerts: true,
     securityAlerts: true,
   });
+
+  // Avatar state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Load 2FA status
   useEffect(() => {
@@ -132,6 +139,114 @@ export default function SettingsPage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        setMessage({
+          type: 'error',
+          text: 'File size must be less than 5MB',
+        });
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setMessage({
+          type: 'error',
+          text: 'Only image files (JPEG, PNG, GIF, WebP) are allowed',
+        });
+        return;
+      }
+
+      setAvatarFile(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAvatarUpload = async () => {
+    if (!avatarFile) return;
+
+    setUploadingAvatar(true);
+    setMessage(null);
+
+    try {
+      const response = await userAPI.uploadAvatar(avatarFile);
+      const avatarUrl = response.data.avatarUrl;
+
+      setMessage({
+        type: 'success',
+        text: 'Avatar uploaded successfully',
+      });
+
+      // Update user in store
+      if (user) {
+        setUser({
+          ...user,
+          avatarUrl,
+        });
+      }
+
+      // Clear preview
+      setAvatarFile(null);
+      setAvatarPreview(null);
+
+      // Refresh user profile
+      const profileResponse = await userAPI.profile();
+      if (profileResponse.data.user) {
+        setUser(profileResponse.data.user);
+      }
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to upload avatar',
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!confirm('Are you sure you want to remove your avatar?')) {
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setMessage(null);
+
+    try {
+      await userAPI.deleteAvatar();
+
+      setMessage({
+        type: 'success',
+        text: 'Avatar removed successfully',
+      });
+
+      // Update user in store
+      if (user) {
+        setUser({
+          ...user,
+          avatarUrl: undefined,
+        });
+      }
+    } catch (err: any) {
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to remove avatar',
+      });
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -432,6 +547,90 @@ export default function SettingsPage() {
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <form onSubmit={handleProfileSubmit} className="space-y-6 max-w-2xl">
+              {/* Avatar Upload Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Profile Picture
+                </label>
+                <div className="flex items-center space-x-6">
+                  {/* Current/Preview Avatar */}
+                  <div className="relative">
+                    {avatarPreview ? (
+                      <img
+                        src={avatarPreview}
+                        alt="Avatar preview"
+                        className="w-24 h-24 rounded-full object-cover border-2 border-gray-300"
+                      />
+                    ) : user?.avatarUrl ? (
+                      <img
+                        src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl}`}
+                        alt="Current avatar"
+                        className="w-24 h-24 rounded-full object-cover border-2 border-gray-300"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center border-2 border-gray-300">
+                        <span className="text-blue-600 font-semibold text-3xl">
+                          {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="file"
+                        id="avatar-upload"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={handleAvatarSelect}
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                      />
+                      <label
+                        htmlFor="avatar-upload"
+                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Camera className="h-4 w-4 mr-2" />
+                        Choose Photo
+                      </label>
+
+                      {avatarFile && (
+                        <button
+                          type="button"
+                          onClick={handleAvatarUpload}
+                          disabled={uploadingAvatar}
+                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {uploadingAvatar ? 'Uploading...' : 'Upload'}
+                        </button>
+                      )}
+
+                      {user?.avatarUrl && !avatarFile && (
+                        <button
+                          type="button"
+                          onClick={handleAvatarDelete}
+                          disabled={uploadingAvatar}
+                          className="inline-flex items-center px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg font-medium hover:bg-red-100 transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                      JPG, PNG, GIF or WebP. Max size 5MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Full Name
