@@ -17,6 +17,8 @@ const logger = require('../utils/logger');
 const cache = require('../utils/cache');
 const storageManager = require('./storageManager');
 const fs = require('fs-extra');
+const rdsService = require('./rdsService');
+const s3Service = require('./s3Service');
 
 // Import WebSocket service
 let websocketService = null;
@@ -176,6 +178,184 @@ async function uploadDeploymentArtifactsToS3(deploymentId, userId, projectPath =
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Provision managed resources (RDS, S3) based on template configuration
+ */
+async function provisionManagedResources(deploymentId, deployment, template, awsCredentials) {
+  const { ManagedDatabase } = getModels();
+  const resources = {
+    rds: null,
+    s3: null,
+    environmentVariables: {}
+  };
+
+  try {
+    const templateConfig = template?.configuration || {};
+    const supportsRDS = templateConfig.supports_rds || false;
+    const supportsS3 = templateConfig.supports_s3 || false;
+
+    // Provision RDS if template supports it
+    if (supportsRDS) {
+      await addLog(deploymentId, 'info', '🗄️  Provisioning managed MySQL database (RDS)...');
+      logger.info('Worker: Provisioning RDS for template-based deployment', {
+        deploymentId,
+        template: template.slug
+      });
+
+      try {
+        // Get VPC ID from deployment configuration or use default
+        const vpcId = deployment.configuration?.vpcId || 'vpc-default';
+
+        const rdsResult = await rdsService.createMySQLInstance({
+          projectName: deployment.project_name,
+          region: deployment.region,
+          awsCredentials: {
+            accessKeyId: awsCredentials.accessKeyId,
+            secretAccessKey: awsCredentials.secretAccessKey
+          },
+          vpcId: vpcId,
+          instanceClass: templateConfig.default_instance_type || 'db.t3.micro',
+          allocatedStorage: templateConfig.default_storage || 20,
+          engine: 'mysql',
+          engineVersion: templateConfig.default_mysql_version || '8.0.35',
+          multiAZ: false,
+          backupRetentionDays: 7,
+          dbName: deployment.project_name.toLowerCase().replace(/[^a-z0-9]/g, '') || 'appdb'
+        });
+
+        // Save to database
+        const database = await ManagedDatabase.create({
+          deployment_id: deploymentId,
+          user_id: deployment.user_id,
+          provider: 'aws',
+          service: 'rds_mysql',
+          instance_identifier: rdsResult.instanceIdentifier,
+          instance_class: rdsResult.instanceClass,
+          engine: rdsResult.engine,
+          engine_version: rdsResult.engineVersion,
+          allocated_storage: rdsResult.allocatedStorage,
+          storage_type: 'gp3',
+          multi_az: false,
+          backup_retention_days: 7,
+          backup_window: '03:00-04:00',
+          maintenance_window: 'mon:04:00-mon:05:00',
+          publicly_accessible: false,
+          connection_info: {
+            endpoint: rdsResult.endpoint,
+            port: rdsResult.port,
+            database_name: rdsResult.dbName,
+            username: rdsResult.masterUsername,
+            password: rdsResult.masterPassword,
+            connection_string: rdsResult.connectionString
+          },
+          security_group_id: rdsResult.securityGroupId,
+          subnet_group: rdsResult.subnetGroupName,
+          status: 'available',
+          region: deployment.region,
+          cost_estimate_monthly: 15.00
+        });
+
+        resources.rds = rdsResult;
+
+        // Add environment variables for RDS connection
+        resources.environmentVariables = {
+          ...resources.environmentVariables,
+          DB_HOST: rdsResult.endpoint,
+          DB_PORT: rdsResult.port.toString(),
+          DB_NAME: rdsResult.dbName,
+          DB_USER: rdsResult.masterUsername,
+          DB_PASSWORD: rdsResult.masterPassword,
+          DATABASE_URL: rdsResult.connectionString
+        };
+
+        await addLog(deploymentId, 'success', `✅ RDS MySQL instance created: ${rdsResult.instanceIdentifier}`);
+        await addLog(deploymentId, 'info', `   Database endpoint: ${rdsResult.endpoint}`);
+        await addLog(deploymentId, 'info', `   Database name: ${rdsResult.dbName}`);
+        await addLog(deploymentId, 'info', `   Username: ${rdsResult.masterUsername}`);
+
+        logger.info('Worker: RDS provisioning completed', {
+          deploymentId,
+          instanceIdentifier: rdsResult.instanceIdentifier,
+          endpoint: rdsResult.endpoint
+        });
+
+      } catch (rdsError) {
+        logger.error('Worker: RDS provisioning failed', {
+          deploymentId,
+          error: rdsError.message,
+          stack: rdsError.stack
+        });
+        await addLog(deploymentId, 'error', `❌ Failed to provision RDS: ${rdsError.message}`);
+        // Continue deployment even if RDS fails - user can set up database manually
+      }
+    }
+
+    // Provision S3 if template supports it
+    if (supportsS3) {
+      await addLog(deploymentId, 'info', '☁️  Provisioning S3 bucket for static assets...');
+      logger.info('Worker: Provisioning S3 for template-based deployment', {
+        deploymentId,
+        template: template.slug
+      });
+
+      try {
+        const s3Result = await s3Service.createBucket({
+          projectName: deployment.project_name,
+          region: deployment.region,
+          awsCredentials: {
+            accessKeyId: awsCredentials.accessKeyId,
+            secretAccessKey: awsCredentials.secretAccessKey
+          },
+          purpose: 'media',
+          enableVersioning: false,
+          enableLifecycle: true,
+          createCloudFront: false,
+          userId: deployment.user_id,
+          deploymentId: deploymentId
+        });
+
+        resources.s3 = s3Result;
+
+        // Add S3 environment variables
+        resources.environmentVariables = {
+          ...resources.environmentVariables,
+          ...s3Result.environmentVariables
+        };
+
+        await addLog(deploymentId, 'success', `✅ S3 bucket created: ${s3Result.bucketName}`);
+        await addLog(deploymentId, 'info', `   Bucket URL: ${s3Result.s3Url}`);
+        await addLog(deploymentId, 'info', `   Region: ${s3Result.region}`);
+
+        logger.info('Worker: S3 provisioning completed', {
+          deploymentId,
+          bucketName: s3Result.bucketName,
+          region: s3Result.region
+        });
+
+      } catch (s3Error) {
+        logger.error('Worker: S3 provisioning failed', {
+          deploymentId,
+          error: s3Error.message,
+          stack: s3Error.stack
+        });
+        await addLog(deploymentId, 'error', `❌ Failed to provision S3: ${s3Error.message}`);
+        // Continue deployment even if S3 fails
+      }
+    }
+
+    return resources;
+
+  } catch (error) {
+    logger.error('Worker: Managed resources provisioning failed', {
+      deploymentId,
+      error: error.message,
+      stack: error.stack
+    });
+    // Return partial resources
+    return resources;
   }
 }
 
@@ -428,6 +608,75 @@ async function processDeployment(deploymentId) {
       // Process Azure deployment
       await processAzureDeployment(deploymentId, deployment, user);
       return { success: true, deploymentId };
+    }
+
+    // Check if deployment uses a template and provision managed resources (RDS, S3)
+    let managedResources = { environmentVariables: {} };
+    if (deployment.configuration?.template_id || deployment.configuration?.templateId) {
+      const { DeploymentTemplate, EncryptedCredential } = getModels();
+      const templateId = deployment.configuration.template_id || deployment.configuration.templateId;
+
+      await addLog(deploymentId, 'info', '📋 Loading deployment template...');
+      const template = await DeploymentTemplate.findByPk(templateId);
+
+      if (template) {
+        await addLog(deploymentId, 'info', `Using template: ${template.name}`);
+        logger.info('Worker: Using template for deployment', {
+          deploymentId,
+          templateId,
+          templateName: template.name,
+          templateSlug: template.slug
+        });
+
+        // Get AWS credentials for provisioning
+        const awsCredential = await EncryptedCredential.findOne({
+          where: {
+            user_id: deployment.user_id,
+            credential_type: 'aws'
+          }
+        });
+
+        if (awsCredential) {
+          const decryptedData = decrypt(
+            {
+              encrypted: awsCredential.encrypted_data,
+              iv: awsCredential.iv,
+              authTag: awsCredential.auth_tag,
+              salt: awsCredential.salt
+            },
+            deployment.user_id
+          );
+          const awsCredentials = JSON.parse(decryptedData);
+
+          // Provision RDS and S3 if template supports them
+          managedResources = await provisionManagedResources(
+            deploymentId,
+            deployment,
+            template,
+            awsCredentials
+          );
+
+          // Merge managed resource environment variables into deployment configuration
+          if (Object.keys(managedResources.environmentVariables).length > 0) {
+            deployment.configuration = {
+              ...deployment.configuration,
+              environmentVariables: {
+                ...(deployment.configuration.environmentVariables || {}),
+                ...managedResources.environmentVariables
+              }
+            };
+
+            await deployment.save();
+            logger.info('Worker: Environment variables injected for managed resources', {
+              deploymentId,
+              variables: Object.keys(managedResources.environmentVariables)
+            });
+          }
+        }
+      } else {
+        logger.warn('Worker: Template not found', { deploymentId, templateId });
+        await addLog(deploymentId, 'warning', `Template not found: ${templateId}`);
+      }
     }
 
     // Default: Execute AWS deployment using CLI deployment executor via bridge

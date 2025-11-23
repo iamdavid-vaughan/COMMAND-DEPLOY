@@ -1,0 +1,31 @@
+{
+  "name": "@focal-deploy/storage",
+  "version": "1.0.0",
+  "description": "Simplified S3 storage helper for Focal Deploy applications",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [
+    "focal-deploy",
+    "s3",
+    "storage",
+    "aws",
+    "cloud-storage"
+  ],
+  "author": "Focal Deploy",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.935.0",
+    "@aws-sdk/s3-request-presigner": "^3.935.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/focal-deploy/storage.git"
+  },
+  "homepage": "https://github.com/focal-deploy/storage#readme"
+}
