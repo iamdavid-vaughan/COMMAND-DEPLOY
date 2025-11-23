@@ -19,12 +19,14 @@
 require('dotenv').config();
 
 const express = require('express');
+const http = require('http');
 const helmet = require('helmet');
 const cors = require('cors');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const chalk = require('chalk');
+const logger = require('./utils/logger');
 
 // Import routes
 const authRoutes = require('./routes/authNew'); // New email-first authentication
@@ -33,8 +35,10 @@ const twoFactorAuthRoutes = require('./routes/twoFactorAuth');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const deploymentRoutes = require('./routes/deployments');
+const templatesRoutes = require('./routes/templates');
 const credentialsRoutes = require('./routes/credentials');
 const gcpCredentialsRoutes = require('./routes/gcpCredentials');
+const azureCredentialsRoutes = require('./routes/azureCredentials');
 const monitoringRoutes = require('./routes/monitoring');
 const usageRoutes = require('./routes/usage');
 const billingRoutes = require('./routes/billing');
@@ -45,6 +49,21 @@ const passwordSecurityRoutes = require('./routes/password-security');
 const apiKeysRoutes = require('./routes/api-keys');
 const adminSettingsRoutes = require('./routes/admin-settings');
 const storageRoutes = require('./routes/storage');
+const logsRoutes = require('./routes/logs');
+const emailManagementRoutes = require('./routes/emailManagement');
+const postmarkWebhookRoutes = require('./routes/postmarkWebhook');
+const sessionsRoutes = require('./routes/sessions');
+const teamsRoutes = require('./routes/teams');
+const contactRoutes = require('./routes/contact');
+const statusRoutes = require('./routes/status');
+const alertsRoutes = require('./routes/alerts');
+const sslRoutes = require('./routes/ssl');
+const systemAlertsRoutes = require('./routes/systemAlerts');
+const appControlsRoutes = require('./routes/appControls');
+const securityRoutes = require('./routes/security');
+const sshKeysRoutes = require('./routes/sshKeys');
+const dnsManagementRoutes = require('./routes/dnsManagement');
+const { router: terminalRoutes, handleWebSocketUpgrade } = require('./routes/terminal');
 
 // Import middleware
 const { errorHandler } = require('./middleware/error-handler');
@@ -56,8 +75,10 @@ const { initializeDatabase } = require('./services/database');
 const { initializeRedis } = require('./services/redis');
 const { initializeModels } = require('./models');
 const { startWorker } = require('./services/deploymentWorker');
+const { initializeWebSocket } = require('./services/websocket');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -78,6 +99,9 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", 'data:', 'https:'],
     },
+  },
+  crossOriginResourcePolicy: {
+    policy: "cross-origin"
   },
   hsts: {
     maxAge: 31536000,
@@ -101,7 +125,7 @@ app.use(cors(corsOptions));
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 500, // Limit each IP to 500 requests per windowMs (increased for better UX)
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -125,6 +149,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(compression());
 
 /**
+ * Static Files - Serve avatars and other public assets
+ */
+app.use('/avatars', express.static('public/avatars'));
+
+/**
  * Logging
  */
 if (NODE_ENV === 'production') {
@@ -134,33 +163,45 @@ if (NODE_ENV === 'production') {
 }
 app.use(requestLogger);
 
-// Response logging middleware - log all auth responses
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(data) {
-    if (req.path.includes('/auth/')) {
-      console.log(`📤 [RESPONSE] ${req.method} ${req.path} - Status: ${res.statusCode}`);
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.token) {
-          console.log(`📤 [RESPONSE] Token in response: ${parsed.token.substring(0, 20)}... (${parsed.token.length} chars)`);
+// Response logging middleware - ONLY in development (security: never log tokens)
+if (NODE_ENV === 'development') {
+  app.use((req, res, next) => {
+    const originalSend = res.send;
+    res.send = function(data) {
+      if (req.path.includes('/auth/')) {
+        try {
+          const parsed = JSON.parse(data);
+          // SECURITY: Never log full tokens, even in development
+          if (parsed.token) {
+            logger.debug('Auth response generated', {
+              method: req.method,
+              path: req.path,
+              statusCode: res.statusCode,
+              tokenLength: parsed.token.length
+            });
+          }
+          if (parsed.user) {
+            // Log user without sensitive fields
+            const { password_hash, twofa_secret, ...safeUser } = parsed.user;
+            logger.debug('Auth user data', { user: safeUser });
+          }
+        } catch (e) {
+          // Not JSON, skip
         }
-        if (parsed.user) {
-          console.log(`📤 [RESPONSE] User in response:`, JSON.stringify(parsed.user));
-        }
-      } catch (e) {
-        // Not JSON, skip
       }
-    }
-    originalSend.call(this, data);
-  };
-  next();
-});
+      originalSend.call(this, data);
+    };
+    next();
+  });
+}
 
 /**
  * API Routes
  */
 app.use('/api/health', healthRoutes);
+app.use('/api/contact', contactRoutes); // Contact form (public)
+app.use('/api/status', statusRoutes); // Status page (public)
+app.use('/api/webhooks', postmarkWebhookRoutes); // Postmark webhooks (public)
 app.use('/api/auth/2fa', twoFactorAuthRoutes); // 2FA routes (must come before /api/auth)
 app.use('/api/auth', authRoutes); // Email-first authentication
 app.use('/api/oauth', oauthRoutes); // OAuth (Google/GitHub)
@@ -168,16 +209,32 @@ app.use('/api/pricing', pricingRoutes); // Public pricing info
 app.use('/api/user', authenticate, userRoutes);
 app.use('/api/admin', authenticate, adminRoutes);
 app.use('/api/deployments', authenticate, deploymentRoutes);
+app.use('/api/templates', authenticate, templatesRoutes);
 app.use('/api/credentials', authenticate, credentialsRoutes);
 app.use('/api/gcp-credentials', authenticate, gcpCredentialsRoutes);
+app.use('/api/azure-credentials', authenticate, azureCredentialsRoutes);
 app.use('/api/monitoring', monitoringRoutes); // Public endpoint for agents + authenticated for users
 app.use('/api/usage', authenticate, usageRoutes);
-app.use('/api/billing', authenticate, billingRoutes);
+// Mount public billing endpoints first (no auth)
+app.use('/api/billing', billingRoutes);
+// Note: billingRoutes handles its own auth on protected endpoints
 app.use('/api/audit', authenticate, auditRoutes);
 app.use('/api/password-security', authenticate, passwordSecurityRoutes);
 app.use('/api/api-keys', authenticate, apiKeysRoutes);
 app.use('/api/admin/settings', authenticate, adminSettingsRoutes);
 app.use('/api/storage', authenticate, storageRoutes);
+app.use('/api/logs', logsRoutes); // Super admin only - has its own auth check
+app.use('/api/admin/emails', authenticate, emailManagementRoutes); // Super admin only - has its own auth check
+app.use('/api/sessions', authenticate, sessionsRoutes); // Session management
+app.use('/api/teams', authenticate, teamsRoutes); // Team management
+app.use('/api/alerts', alertsRoutes); // Alert rules and history (has own auth)
+app.use('/api/ssl', sslRoutes); // SSL certificate management (has own auth)
+app.use('/api/admin', systemAlertsRoutes); // System alerts (super admin only, has own auth)
+app.use('/api/app-controls', appControlsRoutes); // Application controls (has own auth)
+app.use('/api/security', securityRoutes); // Security dashboard (has own auth)
+app.use('/api/ssh-keys', authenticate, sshKeysRoutes); // SSH key management
+app.use('/api/dns', authenticate, dnsManagementRoutes); // DNS management
+app.use('/api/terminal', terminalRoutes); // Terminal auth endpoint
 
 /**
  * Root Route
@@ -222,48 +279,114 @@ app.use(errorHandler);
  */
 async function startServer() {
   try {
-    console.log(chalk.bold.cyan('\n🚀 Starting Focal Deploy SaaS API Server...\n'));
+    logger.info('Starting Focal Deploy SaaS API Server', {
+      nodeVersion: process.version,
+      environment: NODE_ENV,
+      port: PORT
+    });
 
     // Initialize Database
-    console.log(chalk.gray('📦 Initializing database connection...'));
+    logger.info('Initializing database connection...');
     await initializeDatabase();
-    console.log(chalk.green('✅ Database connected'));
+    logger.info('Database connected successfully');
 
     // Initialize Models
-    console.log(chalk.gray('📦 Initializing database models...'));
+    logger.info('Initializing database models...');
     initializeModels();
-    console.log(chalk.green('✅ Models initialized\n'));
+    logger.info('Database models initialized');
 
     // Initialize Redis
-    console.log(chalk.gray('📦 Initializing Redis connection...'));
+    logger.info('Initializing Redis connection...');
     await initializeRedis();
-    console.log(chalk.green('✅ Redis connected\n'));
+    logger.info('Redis connected successfully');
 
     // Start Deployment Worker
-    console.log(chalk.gray('🔄 Starting deployment worker...'));
+    logger.info('Starting deployment worker...', { pollInterval: '30s' });
     const stopWorker = startWorker(30000); // Poll every 30 seconds
-    console.log(chalk.green('✅ Deployment worker started\n'));
+    logger.info('Deployment worker started');
 
     // Store stopWorker function for graceful shutdown
     global.stopDeploymentWorker = stopWorker;
 
     // Initialize Account Cleanup Cron Job
-    console.log(chalk.gray('🧹 Initializing account cleanup cron job...'));
+    logger.info('Initializing account cleanup cron job...');
     const { initializeCleanupCron } = require('./services/accountCleanupService');
     initializeCleanupCron();
-    console.log(chalk.green('✅ Cleanup cron job initialized (runs daily at 2 AM)\n'));
+    logger.info('Cleanup cron job initialized', { schedule: 'daily at 2 AM' });
+
+    // Initialize Email Cron Job
+    logger.info('Initializing email cron job...');
+    const emailCronJob = require('./services/emailCronJob');
+    await emailCronJob.initialize();
+    logger.info('Email cron job initialized', { schedule: 'every 5 minutes' });
+
+    // Initialize Subscription/Payment Check Cron Job
+    logger.info('Initializing subscription check cron job...');
+    const cron = require('node-cron');
+    const suspensionService = require('./services/suspensionService');
+    // Run daily at 3 AM to check for delinquent subscriptions
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        logger.info('Running daily subscription delinquency check...');
+        const result = await suspensionService.processDelinquentSubscriptions();
+        logger.info('Subscription check complete', { processed: result.processed });
+      } catch (error) {
+        logger.error('Subscription check failed', { error: error.message });
+      }
+    });
+    logger.info('Subscription check cron job initialized', { schedule: 'daily at 3 AM' });
+
+    // Initialize WebSocket
+    logger.info('Initializing WebSocket server...');
+    initializeWebSocket(server);
+    logger.info('WebSocket server initialized');
+
+    // Initialize WebSocket server for SSH terminals
+    const WebSocket = require('ws');
+    const wss = new WebSocket.Server({ noServer: true });
+
+    wss.on('connection', handleWebSocketUpgrade);
+
+    // Handle WebSocket upgrade requests for terminal
+    server.on('upgrade', (request, socket, head) => {
+      const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+
+      if (pathname === '/terminal') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          handleWebSocketUpgrade(ws, request);
+        });
+      } else {
+        socket.destroy();
+      }
+    });
+
+    logger.info('Terminal WebSocket server initialized');
 
     // Start Server
-    app.listen(PORT, () => {
-      console.log(chalk.bold.green(`✅ Server running on port ${PORT}`));
-      console.log(chalk.gray(`   Environment: ${NODE_ENV}`));
-      console.log(chalk.gray(`   API URL: http://localhost:${PORT}`));
-      console.log(chalk.gray(`   Health: http://localhost:${PORT}/api/health\n`));
-      console.log(chalk.bold.cyan('🎯 Focal Deploy SaaS API is ready!\n'));
+    server.listen(PORT, () => {
+      logger.info('Focal Deploy SaaS API is ready', {
+        port: PORT,
+        environment: NODE_ENV,
+        apiUrl: `http://localhost:${PORT}`,
+        healthUrl: `http://localhost:${PORT}/api/health`,
+        websocket: 'enabled'
+      });
+
+      // Also log to console with colors for development
+      if (NODE_ENV === 'development') {
+        console.log(chalk.bold.green(`\n✅ Server running on port ${PORT}`));
+        console.log(chalk.gray(`   Environment: ${NODE_ENV}`));
+        console.log(chalk.gray(`   API URL: http://localhost:${PORT}`));
+        console.log(chalk.gray(`   Health: http://localhost:${PORT}/api/health`));
+        console.log(chalk.gray(`   WebSocket: enabled\n`));
+      }
     });
 
   } catch (error) {
-    console.error(chalk.red('❌ Failed to start server:'), error);
+    logger.error('Failed to start server', {
+      error: error.message,
+      stack: error.stack
+    });
     process.exit(1);
   }
 }
@@ -272,17 +395,19 @@ async function startServer() {
  * Graceful Shutdown
  */
 process.on('SIGTERM', () => {
-  console.log(chalk.yellow('\n⚠️  SIGTERM received, shutting down gracefully...'));
+  logger.warn('SIGTERM received, shutting down gracefully...', { signal: 'SIGTERM' });
   if (global.stopDeploymentWorker) {
     global.stopDeploymentWorker();
+    logger.info('Deployment worker stopped');
   }
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log(chalk.yellow('\n⚠️  SIGINT received, shutting down gracefully...'));
+  logger.warn('SIGINT received, shutting down gracefully...', { signal: 'SIGINT' });
   if (global.stopDeploymentWorker) {
     global.stopDeploymentWorker();
+    logger.info('Deployment worker stopped');
   }
   process.exit(0);
 });
